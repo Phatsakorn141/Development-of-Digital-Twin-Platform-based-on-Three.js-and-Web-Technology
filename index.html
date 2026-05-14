@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Twin - Industrial Machine Controller</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header id="app-header">
+        <div class="header-left">
+            <span class="material-icons-round logo-icon">hub</span>
+            <h1>Digital Twin</h1>
+            <span class="header-badge">Prototype</span>
+        </div>
+        <div class="header-center">
+            <div id="sim-controls" class="sim-controls hidden">
+                <button id="btn-sim-toggle" class="btn btn-sim" title="Start Simulation">
+                    <span class="material-icons-round">play_arrow</span>
+                </button>
+                <div class="sim-speed">
+                    <label>Speed</label>
+                    <input type="range" id="sim-speed-slider" min="0.1" max="5" step="0.1" value="1">
+                    <span id="sim-speed-val">1.0x</span>
+                </div>
+                <div class="sim-status" id="sim-status">
+                    <span class="sim-dot"></span>
+                    Idle
+                </div>
+            </div>
+        </div>
+        <div class="header-right">
+            <button id="btn-upload" class="btn btn-primary">
+                <span class="material-icons-round">upload_file</span>
+                Upload GLTF / GLB
+            </button>
+            <input type="file" id="file-input" accept=".gltf,.glb" hidden>
+        </div>
+    </header>
+
+    <main id="app-main">
+        <!-- Left Panel: Node Tree -->
+        <aside id="panel-left" class="panel">
+            <div class="panel-header">
+                <span class="material-icons-round">account_tree</span>
+                <h2>Node Tree</h2>
+                <span class="selection-count hidden" id="selection-count">0 selected</span>
+            </div>
+            <div id="node-tree-container" class="panel-body">
+                <div class="empty-state">
+                    <span class="material-icons-round">cloud_upload</span>
+                    <p>Upload a 3D model to see its node tree</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Center: 3D Viewport -->
+        <section id="viewport-container">
+            <canvas id="three-canvas"></canvas>
+            <div id="viewport-overlay" class="empty-state">
+                <span class="material-icons-round">view_in_ar</span>
+                <h3>No Model Loaded</h3>
+                <p>Upload a GLTF or GLB file to begin</p>
+            </div>
+            <div id="viewport-info">
+                <span id="info-vertices">0 vertices</span>
+                <span id="info-meshes">0 meshes</span>
+                <span id="info-nodes">0 nodes</span>
+            </div>
+        </section>
+
+        <!-- Right Panel: Control (Joints / Presets / Animation) -->
+        <aside id="panel-right" class="panel">
+            <div class="panel-header">
+                <span class="material-icons-round">precision_manufacturing</span>
+                <h2>Control</h2>
+                <button id="btn-import-project" class="btn btn-icon" title="Import Project (.dtwp)">
+                    <span class="material-icons-round">upload_file</span>
+                </button>
+                <button id="btn-export-project" class="btn btn-icon" title="Export Project (.dtwp)" disabled>
+                    <span class="material-icons-round">download</span>
+                </button>
+                <input type="file" id="project-file-input" accept=".dtwp,.json" style="display:none">
+            </div>
+            <!-- Tab Row -->
+            <div class="panel-tabs-row">
+                <button class="tab-btn active" data-tab="tab-joints">
+                    <span class="material-icons-round">settings</span>Joints
+                </button>
+                <button class="tab-btn" data-tab="tab-presets">
+                    <span class="material-icons-round">bookmark</span>Presets
+                </button>
+                <button class="tab-btn" data-tab="tab-animation">
+                    <span class="material-icons-round">movie</span>Animation
+                </button>
+            </div>
+
+            <!-- Joints Tab -->
+            <div id="tab-joints" class="tab-content">
+                <div class="tab-toolbar">
+                    <span class="selection-count hidden" id="selection-count">0 selected</span>
+                    <div style="flex:1"></div>
+                    <button id="btn-add-joint" class="btn btn-icon" title="Add Joint (select nodes first)" disabled>
+                        <span class="material-icons-round">add_circle</span>
+                    </button>
+                </div>
+                <div id="joints-container" class="panel-body">
+                    <div class="empty-state">
+                        <span class="material-icons-round">precision_manufacturing</span>
+                        <p>Check nodes in the tree, then click + to create a joint</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Presets Tab -->
+            <div id="tab-presets" class="tab-content hidden">
+                <div class="tab-toolbar">
+                    <span class="tab-toolbar-label">Saved States</span>
+                    <div style="flex:1"></div>
+                    <button id="btn-save-preset" class="btn btn-secondary btn-sm" disabled>
+                        <span class="material-icons-round">bookmark_add</span>Save State
+                    </button>
+                </div>
+                <div id="presets-container" class="panel-body">
+                    <div class="empty-state">
+                        <span class="material-icons-round">bookmark_border</span>
+                        <p>Set joints to a desired pose, then click Save State to capture it</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Animation Tab -->
+            <div id="tab-animation" class="tab-content hidden">
+                <div class="tab-toolbar anim-toolbar">
+                    <button id="btn-add-keyframe" class="btn btn-secondary btn-sm" disabled>
+                        <span class="material-icons-round">add_circle</span>Add Keyframe
+                    </button>
+                    <div style="flex:1"></div>
+                    <label class="anim-loop-label" title="Loop animation">
+                        <input type="checkbox" id="anim-loop">Loop
+                    </label>
+                    <button id="btn-play-anim" class="btn btn-sim btn-sm" disabled>
+                        <span class="material-icons-round">play_arrow</span>
+                    </button>
+                </div>
+                <div class="anim-timecode" id="anim-timecode">0.00s / 0.00s</div>
+                <div id="animation-container" class="panel-body">
+                    <div class="empty-state">
+                        <span class="material-icons-round">movie</span>
+                        <p>Pose joints, click Add Keyframe. Repeat for each step, then Play.</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- Add Joint Modal -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h3><span class="material-icons-round" style="font-size:20px;vertical-align:middle;margin-right:6px;">settings</span>Add Joint</h3>
+                <button id="modal-close" class="btn btn-icon">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="joint-name">Joint Name</label>
+                    <input type="text" id="joint-name" placeholder="e.g. Base Rotation, Elbow, Wrist">
+                </div>
+                <div class="form-group">
+                    <label>Linked Nodes</label>
+                    <div id="modal-linked-nodes" class="linked-nodes-list"></div>
+                </div>
+                <div class="form-group" id="pivot-group">
+                    <label for="joint-pivot-node">
+                        <span class="material-icons-round" style="font-size:14px;vertical-align:middle;">my_location</span>
+                        Pivot Point
+                    </label>
+                    <select id="joint-pivot-node">
+                        <option value="centroid">Centroid (auto — average of all nodes)</option>
+                    </select>
+                    <span class="form-hint">The node whose position is used as the rotation/translation center</span>
+                </div>
+                <div class="form-group">
+                    <label for="joint-type">Joint Type</label>
+                    <select id="joint-type">
+                        <optgroup label="Standard">
+                            <option value="revolute">Revolute — หมุนรอบแกน (แขนหุ่น, บานพับ)</option>
+                            <option value="prismatic">Prismatic — เลื่อนตามแกน (กระบอกไฮดรอลิก)</option>
+                        </optgroup>
+                        <optgroup label="Special">
+                            <option value="continuous">Continuous — หมุนต่อเนื่อง (ล้อ, สายพาน)</option>
+                            <option value="coupled">Coupled — ผูกกับ joint อื่น (เฟือง, linkage)</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="form-group" id="coupled-group" style="display:none;flex-direction:column;gap:8px">
+                    <label for="joint-coupled-target">ผูกกับ Joint ต้นทาง</label>
+                    <select id="joint-coupled-target"></select>
+                    <label for="joint-coupled-ratio">อัตราส่วน (ratio)</label>
+                    <input type="number" id="joint-coupled-ratio" value="1" step="0.1">
+                    <span class="form-hint">ratio = 2 → หมุน 2 เท่า, -1 → หมุนทิศตรงข้าม</span>
+                </div>
+                <div class="form-group">
+                    <label for="joint-property">Control Property</label>
+                    <select id="joint-property">
+                        <optgroup label="Rotation (radians)">
+                            <option value="rotation.x">Rotation X</option>
+                            <option value="rotation.y" selected>Rotation Y</option>
+                            <option value="rotation.z">Rotation Z</option>
+                        </optgroup>
+                        <optgroup label="Position (offset)">
+                            <option value="position.x">Position X</option>
+                            <option value="position.y">Position Y</option>
+                            <option value="position.z">Position Z</option>
+                        </optgroup>
+                        <optgroup label="Visibility">
+                            <option value="visible">Visible (0/1)</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="joint-min">Min</label>
+                        <input type="number" id="joint-min" value="-3.14" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="joint-max">Max</label>
+                        <input type="number" id="joint-max" value="3.14" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="joint-step">Step</label>
+                        <input type="number" id="joint-step" value="0.01" step="0.001">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="joint-sim-pattern">Sensor Simulation Pattern</label>
+                    <select id="joint-sim-pattern">
+                        <option value="none">None (Manual only)</option>
+                        <option value="sine">Sine Wave</option>
+                        <option value="triangle">Triangle Wave</option>
+                        <option value="sawtooth">Sawtooth</option>
+                        <option value="square">Square Wave</option>
+                        <option value="random">Random Noise</option>
+                    </select>
+                </div>
+                <div class="form-group" id="sim-freq-group">
+                    <label for="joint-sim-freq">Cycle Period (seconds)</label>
+                    <input type="number" id="joint-sim-freq" value="3" step="0.1" min="0.5" max="30">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="modal-confirm" class="btn btn-primary">
+                    <span class="material-icons-round" style="font-size:16px;">add</span>
+                    Create Joint
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module" src="app.js"></script>
+</body>
+</html>
