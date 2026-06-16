@@ -45,6 +45,10 @@ const state = {
     animPlaying: false,     // true = animation กำลังเล่น
     animStartTime: 0,       // timestamp ตอน play (ใช้คำนวณ elapsed)
     animLoop: false,        // true = loop ต่อเนื่องเมื่อถึง keyframe สุดท้าย
+
+    // ── MQTT ──
+    mqttClient: null,       // mqtt.js client instance (null = ยังไม่ได้เชื่อมต่อ)
+    mqttConnected: false,   // true = เชื่อมต่อ broker อยู่
 };
 
 // ============================================================
@@ -122,6 +126,15 @@ const dom = {
     infoVertices: document.getElementById('info-vertices'),
     infoMeshes: document.getElementById('info-meshes'),
     infoNodes: document.getElementById('info-nodes'),
+
+    // MQTT panel (header right)
+    btnMqttToggle:  document.getElementById('btn-mqtt-toggle'),   // ปุ่มเปิด/ปิด panel
+    mqttPanel:      document.getElementById('mqtt-panel'),         // panel กรอก credentials
+    mqttUrl:        document.getElementById('mqtt-url'),           // input broker URL
+    mqttUser:       document.getElementById('mqtt-user'),          // input username
+    mqttPass:       document.getElementById('mqtt-pass'),          // input password
+    btnMqttConnect: document.getElementById('btn-mqtt-connect'),   // ปุ่ม Connect/Disconnect
+    mqttStatus:     document.getElementById('mqtt-status'),        // badge แสดงสถานะ
 };
 
 // ============================================================
@@ -1713,6 +1726,107 @@ function updateSimulation() {
 }
 
 // ============================================================
+// MQTT — เชื่อมต่อ HiveMQ Cloud รับ/ส่งค่า joint แบบ realtime
+//
+// Topic format  : robot/joint/{jointId}
+//                 เช่น  robot/joint/joint_0
+// Message format: ตัวเลข string  เช่น  "1.57"
+//
+// Flow: Broker publish → browser subscribe → applyJointValue() → 3D model ขยับ
+// ============================================================
+
+// ── connectMQTT — เชื่อมต่อ broker ด้วย WebSocket (wss://) ──
+function connectMQTT() {
+    const url  = dom.mqttUrl.value.trim();
+    const user = dom.mqttUser.value.trim();
+    const pass = dom.mqttPass.value.trim();
+
+    if (!url) { alert('กรุณากรอก Broker URL\nเช่น wss://xxxx.s1.eu.hivemq.cloud:8884/mqtt'); return; }
+
+    updateMQTTStatus('connecting');
+
+    // สร้าง client ใหม่ทุกครั้งที่ connect
+    state.mqttClient = mqtt.connect(url, {
+        clientId:        `digital-twin-${Math.random().toString(16).slice(2)}`,
+        username:        user || undefined,   // ถ้าว่างไม่ส่งไป
+        password:        pass || undefined,
+        clean:           true,
+        reconnectPeriod: 3000,   // reconnect อัตโนมัติทุก 3 วินาทีถ้าหลุด
+    });
+
+    // ── เชื่อมต่อสำเร็จ ──
+    state.mqttClient.on('connect', () => {
+        state.mqttConnected = true;
+
+        // subscribe topic robot/joint/# (# = wildcard = ทุก jointId)
+        state.mqttClient.subscribe('robot/joint/#', (err) => {
+            if (err) console.error('MQTT subscribe error:', err);
+        });
+
+        updateMQTTStatus('connected');
+        dom.btnMqttConnect.innerHTML =
+            '<span class="material-icons-round">link_off</span>Disconnect';
+    });
+
+    // ── รับ message จาก broker ──
+    state.mqttClient.on('message', (topic, message) => {
+        // แยก jointId จาก topic เช่น "robot/joint/joint_0" → "joint_0"
+        const jointId = topic.split('/').pop();
+        const value   = parseFloat(message.toString());
+
+        if (isNaN(value)) return;   // ป้องกัน message ที่ไม่ใช่ตัวเลข
+
+        // หา joint ที่ตรงกับ id แล้ว apply ค่า (เหมือน drag slider)
+        const joint = state.joints.find(j => j.id === jointId);
+        if (joint) {
+            applyJointValue(joint, value);
+            syncJointUI(joint, joint.value);
+        }
+    });
+
+    // ── เกิด error ──
+    state.mqttClient.on('error', (err) => {
+        console.error('MQTT error:', err);
+        updateMQTTStatus('error');
+    });
+
+    // ── หลุดการเชื่อมต่อ ──
+    state.mqttClient.on('close', () => {
+        state.mqttConnected = false;
+        updateMQTTStatus('disconnected');
+        dom.btnMqttConnect.innerHTML =
+            '<span class="material-icons-round">link</span>Connect';
+    });
+}
+
+// ── disconnectMQTT — ตัดการเชื่อมต่อ broker ──
+function disconnectMQTT() {
+    if (state.mqttClient) {
+        state.mqttClient.end();   // ปิด WebSocket cleanly
+        state.mqttClient    = null;
+        state.mqttConnected = false;
+        updateMQTTStatus('disconnected');
+        dom.btnMqttConnect.innerHTML =
+            '<span class="material-icons-round">link</span>Connect';
+    }
+}
+
+// ── updateMQTTStatus — อัปเดต badge สีและข้อความสถานะ ──
+function updateMQTTStatus(status) {
+    const map = {
+        connecting:   { text: 'Connecting...', color: '#f59e0b' },   // เหลือง
+        connected:    { text: 'Connected',     color: '#22c55e' },   // เขียว
+        disconnected: { text: 'Disconnected',  color: '#6b7280' },   // เทา
+        error:        { text: 'Error',         color: '#ef4444' },   // แดง
+    };
+    const s = map[status] || map.disconnected;
+    if (dom.mqttStatus) {
+        dom.mqttStatus.innerHTML =
+            `<span class="sim-dot" style="background:${s.color}"></span>${s.text}`;
+    }
+}
+
+// ============================================================
 // Helpers — utility functions เล็กๆ
 // ============================================================
 
@@ -1795,6 +1909,18 @@ function bindEvents() {
     dom.btnAddKeyframe.addEventListener('click', addKeyframe);
     dom.btnPlayAnim.addEventListener('click', toggleAnimationPlayback);
     dom.animLoopChk.addEventListener('change', (e) => { state.animLoop = e.target.checked; });
+
+    // ── MQTT ──
+    // ปุ่ม MQTT (header) → เปิด/ปิด panel กรอก credentials
+    dom.btnMqttToggle.addEventListener('click', () => {
+        dom.mqttPanel.classList.toggle('hidden');
+    });
+
+    // ปุ่ม Connect/Disconnect → สลับระหว่างเชื่อมต่อและตัดการเชื่อมต่อ
+    dom.btnMqttConnect.addEventListener('click', () => {
+        if (state.mqttConnected) disconnectMQTT();
+        else connectMQTT();
+    });
 }
 
 // ============================================================

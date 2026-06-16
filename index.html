@@ -8,6 +8,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <!-- MQTT.js — ต้องโหลดก่อน app.js เพราะ app.js ใช้ mqtt.connect() -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 <body>
     <!-- Header -->
@@ -34,11 +36,40 @@
             </div>
         </div>
         <div class="header-right">
+            <!-- MQTT toggle button — เปิด/ปิด panel กรอก broker -->
+            <button id="btn-mqtt-toggle" class="btn btn-secondary" title="MQTT Connection">
+                <span class="material-icons-round">sensors</span>
+                MQTT
+            </button>
             <button id="btn-upload" class="btn btn-primary">
                 <span class="material-icons-round">upload_file</span>
                 Upload GLTF / GLB
             </button>
             <input type="file" id="file-input" accept=".gltf,.glb" hidden>
+        </div>
+        <!-- MQTT Panel — กรอก broker URL, username, password แล้วกด Connect -->
+        <!-- ซ่อนไว้ก่อน เปิดด้วยปุ่ม MQTT ด้านบน -->
+        <div id="mqtt-panel" class="mqtt-panel hidden">
+            <div class="mqtt-fields">
+                <input id="mqtt-url"
+                       type="text"
+                       class="mqtt-input"
+                       placeholder="wss://xxxx.s1.eu.hivemq.cloud:8884/mqtt">
+                <input id="mqtt-user"
+                       type="text"
+                       class="mqtt-input-sm"
+                       placeholder="Username">
+                <input id="mqtt-pass"
+                       type="password"
+                       class="mqtt-input-sm"
+                       placeholder="Password">
+            </div>
+            <button id="btn-mqtt-connect" class="btn btn-secondary">
+                <span class="material-icons-round">link</span>Connect
+            </button>
+            <div id="mqtt-status" class="mqtt-status">
+                <span class="sim-dot"></span>Disconnected
+            </div>
         </div>
     </header>
 

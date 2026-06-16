@@ -1095,3 +1095,68 @@ html, body {
 .joint-slider-row input[type="range"] {
     flex: 1;
 }
+
+/* ===== MQTT Panel ===== */
+
+/* panel ลอยอยู่ใต้ header-right */
+.mqtt-panel {
+    position: absolute;
+    top: 56px;
+    right: 12px;
+    z-index: 200;
+    background: var(--surface, #1a1d27);
+    border: 1px solid var(--border, #2d3245);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 360px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+/* แถว inputs */
+.mqtt-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* input broker URL (กว้างเต็ม) */
+.mqtt-input {
+    width: 100%;
+    padding: 7px 10px;
+    background: var(--bg, #0f1117);
+    border: 1px solid var(--border, #2d3245);
+    border-radius: 6px;
+    color: var(--text, #e2e8f0);
+    font-size: 12px;
+    font-family: monospace;
+}
+
+/* input username / password (เล็กกว่า) */
+.mqtt-input-sm {
+    width: 100%;
+    padding: 6px 10px;
+    background: var(--bg, #0f1117);
+    border: 1px solid var(--border, #2d3245);
+    border-radius: 6px;
+    color: var(--text, #e2e8f0);
+    font-size: 12px;
+}
+
+.mqtt-input:focus,
+.mqtt-input-sm:focus {
+    outline: none;
+    border-color: var(--accent, #6366f1);
+}
+
+/* badge สถานะ Connected / Disconnected */
+.mqtt-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted, #64748b);
+    padding: 2px 0;
+}
