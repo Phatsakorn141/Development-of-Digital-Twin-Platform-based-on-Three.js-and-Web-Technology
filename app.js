@@ -47,6 +47,7 @@ const state = {
     animLoop: false,        // true = loop ต่อเนื่องเมื่อถึง keyframe สุดท้าย
 
     // ── MQTT ──
+    editingJointId: null,   // null = โหมดสร้างใหม่, มีค่า = กำลังแก้ joint ตัวนั้น
     mqttClient: null,       // mqtt.js client instance (null = ยังไม่ได้เชื่อมต่อ)
     mqttConnected: false,   // true = เชื่อมต่อ broker อยู่
 };
@@ -82,6 +83,7 @@ const dom = {
 
     // Add Joint modal
     modalOverlay: document.getElementById('modal-overlay'),
+    modalTitle: document.getElementById('modal-title'),   // หัวข้อ modal — สลับข้อความตามโหมด
     modalClose: document.getElementById('modal-close'),
     modalCancel: document.getElementById('modal-cancel'),
     modalConfirm: document.getElementById('modal-confirm'),
@@ -96,7 +98,12 @@ const dom = {
     jointStep: document.getElementById('joint-step'),
     jointSimPattern: document.getElementById('joint-sim-pattern'),
     jointSimFreq: document.getElementById('joint-sim-freq'),
-    simFreqGroup: document.getElementById('sim-freq-group'),            // แถว period (ซ่อนถ้า pattern=none)
+    jointSrcTopic: document.getElementById('joint-src-topic'),   // topic ที่ joint นี้ฟัง
+    jointSrcPath:  document.getElementById('joint-src-path'),    // ตำแหน่งค่าใน payload
+    jointScale:    document.getElementById('joint-scale'),       // ตัวคูณแปลงหน่วย
+    jointInvert:   document.getElementById('joint-invert'),      // กลับทิศ
+    jointOffset:   document.getElementById('joint-offset'),      // เลื่อนจุดศูนย์
+    simFreqGroup: document.getElementById('sim-freq-group'),            // แถว period (ซ่อนถ้า pattern=none)          // แถว period (ซ่อนถ้า pattern=none)
     jointPivotNode: document.getElementById('joint-pivot-node'),
     pivotGroup: document.getElementById('pivot-group'),                 // แถว pivot dropdown (ซ่อนถ้า single node)
     modalLinkedNodes: document.getElementById('modal-linked-nodes'),    // แสดง chip ของ node ที่เลือก
@@ -581,6 +588,16 @@ function openAddJointModal() {
     dom.jointProperty.value = 'rotation.y';
     dom.jointSimPattern.value = 'none';
     dom.jointSimFreq.value = '3';
+
+    // ── binding: สืบ topic จาก joint ตัวก่อนหน้า ──
+    // ปกติทุก joint ของหุ่นตัวเดียวกันใช้ topic เดียวกัน จะได้ไม่ต้องพิมพ์ซ้ำ 6 รอบ
+    const prevJoint = state.joints[state.joints.length - 1];
+    dom.jointSrcTopic.value = prevJoint?.srcTopic || '';
+    dom.jointSrcPath.value  = '';    // path ต่างกันทุก joint ไม่สืบทอด
+    dom.jointScale.value    = '1';
+    dom.jointOffset.value   = '0';
+    dom.jointInvert.checked = false;
+
     dom.coupledGroup.style.display = 'none';
     if (dom.pivotManualGroup) dom.pivotManualGroup.style.display = 'none';
     updateMinMaxDefaults();
@@ -613,6 +630,139 @@ function openAddJointModal() {
 
     dom.modalOverlay.classList.remove('hidden');
     dom.jointName.focus();
+}
+
+// ── openEditJointModal — เปิด modal ในโหมดแก้ไข joint ที่มีอยู่แล้ว ──
+// ต่างจาก openAddJointModal ตรงที่ไม่แตะ node ที่ผูกไว้และไม่แตะ pivot
+// เพราะสองอย่างนั้นต้องรื้อ hierarchy ใหม่ — ถ้าจำเป็นต้องเปลี่ยนให้ลบแล้วสร้างใหม่
+function openEditJointModal(jointId) {
+    const joint = state.joints.find(j => j.id === jointId);
+    if (!joint) return;
+
+    state.editingJointId = jointId;
+
+    // ── แสดง chip ของ node ที่ผูกอยู่ (ดูอย่างเดียว) ──
+    dom.modalLinkedNodes.innerHTML = '';
+    for (const uuid of joint.nodeUUIDs) {
+        const info = state.nodeList.find(n => n.uuid === uuid);
+        const chip = document.createElement('span');
+        chip.className = 'linked-node-chip';
+        chip.innerHTML = `<span class="material-icons-round">link</span>${escapeHtml(info ? info.name : '?')}`;
+        dom.modalLinkedNodes.appendChild(chip);
+    }
+
+    // ซ่อน pivot ทั้งกลุ่ม — แก้ไม่ได้ในโหมดนี้ ไม่ต้องแสดงให้สับสน
+    dom.pivotGroup.style.display = 'none';
+    if (dom.pivotManualGroup) dom.pivotManualGroup.style.display = 'none';
+
+    // ── เติมค่าเดิมของ joint ลงในฟอร์ม ──
+    dom.jointName.value         = joint.name;
+    dom.jointType.value         = joint.jointType || 'revolute';
+    dom.jointProperty.value     = joint.property;
+    dom.jointMin.value          = joint.min;
+    dom.jointMax.value          = joint.max;
+    dom.jointStep.value         = joint.step;
+    dom.jointSimPattern.value   = joint.simPattern || 'none';
+    dom.jointSimFreq.value      = joint.simPeriod ?? 3;
+    dom.jointCoupledRatio.value = joint.coupledRatio ?? 1;
+
+    dom.jointSrcTopic.value = joint.srcTopic || '';
+    dom.jointSrcPath.value  = joint.srcPath  || '';
+    dom.jointScale.value    = joint.scale  ?? 1;
+    dom.jointOffset.value   = joint.offset ?? 0;
+    dom.jointInvert.checked = !!joint.invert;
+
+    // ── dropdown coupled: ตัดตัวเองออก กัน joint ผูกกับตัวเองแล้ว loop ไม่รู้จบ ──
+
+    // ── dropdown coupled: ตัดตัวเองออก กัน joint ผูกกับตัวเองแล้ว loop ไม่รู้จบ ──
+    dom.jointCoupledTarget.innerHTML = '<option value="">-- เลือก Joint ต้นทาง --</option>';
+    for (const j of state.joints) {
+        if (j.id === jointId) continue;
+        const opt = document.createElement('option');
+        opt.value = j.id;
+        opt.textContent = j.name;
+        dom.jointCoupledTarget.appendChild(opt);
+    }
+    dom.jointCoupledTarget.value = joint.coupledTarget || '';
+
+    dom.coupledGroup.style.display = (joint.jointType === 'coupled') ? 'flex' : 'none';
+    updateSimFreqVisibility();
+
+    // ── เปลี่ยน Joint Type ระหว่างแก้ไข: แสดง/ซ่อน coupled เท่านั้น ──
+    // ห้าม reset min/max เหมือนโหมด Add เพราะจะทับค่าที่ผู้ใช้ตั้งไว้ (เช่น -6.29/6.29)
+    dom.jointType.onchange = () => {
+        dom.coupledGroup.style.display = (dom.jointType.value === 'coupled') ? 'flex' : 'none';
+    };
+
+    // ── เปลี่ยนหน้าตา modal ให้รู้ว่าอยู่โหมดแก้ไข ──
+    if (dom.modalTitle) {
+        dom.modalTitle.innerHTML =
+            '<span class="material-icons-round" style="font-size:20px;vertical-align:middle;margin-right:6px;">edit</span>Edit Joint';
+    }
+    dom.modalConfirm.innerHTML =
+        '<span class="material-icons-round" style="font-size:16px;">save</span>Save Changes';
+
+    dom.modalOverlay.classList.remove('hidden');
+    dom.jointName.focus();
+}
+
+// ── saveJointEdit — บันทึกค่าที่แก้ทับลง joint เดิม ──
+// สำคัญ: แก้ property ของ object เดิม ไม่สร้าง object ใหม่และไม่ push
+// ตำแหน่งใน state.joints จึงไม่ขยับ → mapping กับ actual_q[i] ไม่พัง
+function saveJointEdit() {
+    const joint = state.joints.find(j => j.id === state.editingJointId);
+    if (!joint) { closeModal(); return; }
+
+    const newProperty = dom.jointProperty.value;
+
+    // ── ถ้าเปลี่ยน property ต้องคืนค่าแกนเดิมก่อน แล้วจับ base ของแกนใหม่ ──
+    // ไม่งั้น node จะค้างมุมของแกนเก่าไว้ตลอด เช่นเปลี่ยน rotation.y → rotation.x
+    // แล้ว rotation.y ยังค้างค่าสุดท้ายอยู่ ทำให้ท่าเพี้ยนถาวร
+    // (joint ที่มี pivotGroup ไม่ต้องทำ เพราะ applyJointValue reset ทั้ง group ทุก frame อยู่แล้ว)
+    if (newProperty !== joint.property && !joint.pivotGroup) {
+        for (const uuid of joint.nodeUUIDs) {
+            const node = state.nodeMap.get(uuid);
+            if (!node) continue;
+            const oldBase = joint.baseValues?.get(uuid);
+            if (oldBase !== undefined) setNodePropertyValue(node, joint.property, oldBase);
+        }
+        const newBase = new Map();
+        for (const uuid of joint.nodeUUIDs) {
+            const node = state.nodeMap.get(uuid);
+            if (node) newBase.set(uuid, getNodePropertyValue(node, newProperty));
+        }
+        joint.baseValues = newBase;
+    }
+
+    // ── เขียนค่าใหม่ทับ ──
+    joint.name          = dom.jointName.value.trim() || joint.name;
+    joint.property      = newProperty;
+    joint.min           = parseFloat(dom.jointMin.value);
+    joint.max           = parseFloat(dom.jointMax.value);
+    joint.step          = parseFloat(dom.jointStep.value);
+    joint.jointType     = dom.jointType.value;
+    joint.simPattern    = dom.jointSimPattern.value;
+    joint.simPeriod     = parseFloat(dom.jointSimFreq.value);
+    joint.coupledTarget = dom.jointCoupledTarget.value || null;
+    joint.coupledRatio  = parseFloat(dom.jointCoupledRatio.value) || 1;
+
+    joint.srcTopic = dom.jointSrcTopic.value.trim();
+    joint.srcPath  = dom.jointSrcPath.value.trim();
+    const sc = parseFloat(dom.jointScale.value);
+    const of = parseFloat(dom.jointOffset.value);
+    joint.scale  = Number.isFinite(sc) ? sc : 1;
+    joint.offset = Number.isFinite(of) ? of : 0;
+    joint.invert = dom.jointInvert.checked;
+
+    resubscribeJoints();   // เผื่อเพิ่ง/เปลี่ยน topic ระหว่างที่ต่อ broker อยู่
+
+    // apply ซ้ำด้วยค่าเดิม เพื่อให้ค่าถูก clamp เข้า min/max ที่เพิ่งเปลี่ยน
+    applyJointValue(joint, joint.value);
+
+    closeModal();
+    renderJoints();
+    updatePresetControls();
+    updateAnimControls();
 }
 
 // ── updateMinMaxDefaults — set min/max/step default ตาม property ที่เลือก ──
@@ -655,8 +805,18 @@ function updatePivotVisibility() {
 }
 
 // ── closeModal — ปิด Add Joint modal ──
+// ── closeModal — ปิด modal และคืนสภาพกลับเป็นโหมด Add ──
 function closeModal() {
     dom.modalOverlay.classList.add('hidden');
+    state.editingJointId = null;     // ออกจากโหมดแก้ไขเสมอ
+
+    // คืนหัวข้อกับปุ่มกลับเป็นของโหมด Add ไม่งั้นครั้งหน้าเปิดมาจะยังขึ้น "Edit Joint"
+    if (dom.modalTitle) {
+        dom.modalTitle.innerHTML =
+            '<span class="material-icons-round" style="font-size:20px;vertical-align:middle;margin-right:6px;">settings</span>Add Joint';
+    }
+    dom.modalConfirm.innerHTML =
+        '<span class="material-icons-round" style="font-size:16px;">add</span>Create Joint';
 }
 
 // ============================================================
@@ -699,6 +859,11 @@ function addJoint() {
     const jointType = dom.jointType.value;
     const coupledTarget = dom.jointCoupledTarget.value || null;
     const coupledRatio = parseFloat(dom.jointCoupledRatio.value) || 1;
+    const srcTopic = dom.jointSrcTopic.value.trim();
+    const srcPath  = dom.jointSrcPath.value.trim();
+    const scale    = parseFloat(dom.jointScale.value);
+    const offset   = parseFloat(dom.jointOffset.value);
+    const invert   = dom.jointInvert.checked;
 
     if (nodeUUIDs.length === 0) return;
 
@@ -814,6 +979,10 @@ function addJoint() {
         jointType,
         coupledTarget,
         coupledRatio,
+        srcTopic, srcPath,
+        scale:  Number.isFinite(scale)  ? scale  : 1,    // ช่องว่าง → 1 (ไม่แปลงหน่วย)
+        offset: Number.isFinite(offset) ? offset : 0,
+        invert,
         _pivotNodeUUID: dom.jointPivotNode.value,   // บันทึกไว้ export .dtwp
     };
 
@@ -1019,9 +1188,12 @@ function renderJoints() {
                     <span class="material-icons-round">settings</span>
                     ${escapeHtml(joint.name)}
                 </span>
-                <span class="joint-limit-warn" id="limit-${joint.id}" style="display:none" title="ใกล้ขีดจำกัด!">
+                  <span class="joint-limit-warn" id="limit-${joint.id}" style="display:none" title="ใกล้ขีดจำกัด!">
                     <span class="material-icons-round" style="font-size:14px;color:#f97316">warning</span>
                 </span>
+                <button class="btn btn-icon edit-joint" data-id="${joint.id}" title="Edit Joint">
+                    <span class="material-icons-round" style="font-size:16px;">edit</span>
+                </button>
                 <button class="btn btn-danger btn-icon remove-joint" data-id="${joint.id}" title="Remove Joint">
                     <span class="material-icons-round" style="font-size:16px;">delete</span>
                 </button>
@@ -1104,6 +1276,9 @@ function renderJoints() {
 
         // ── Event: ลบ joint ──
         card.querySelector('.remove-joint').addEventListener('click', () => removeJoint(joint.id));
+                    
+        // ── Event: แก้ไข joint ──
+        card.querySelector('.edit-joint').addEventListener('click', () => openEditJointModal(joint.id));
 
         // ── Event: click "show nodes" → highlight node ทุกตัวใน viewport ──
         card.querySelector('.show-nodes').addEventListener('click', (e) => {
@@ -1246,6 +1421,11 @@ function exportProject() {
             jointType: j.jointType || 'revolute',
             coupledTarget: j.coupledTarget || null,
             coupledRatio: j.coupledRatio || 1,
+            srcTopic: j.srcTopic || '',
+            srcPath:  j.srcPath  || '',
+            scale:    j.scale  ?? 1,
+            offset:   j.offset ?? 0,
+            invert:   !!j.invert,
             baseValues: j.baseValues ? Object.fromEntries(j.baseValues) : {},
             // baseValuesByName: lookup base value ด้วยชื่อ node (UUID-independent)
             baseValuesByName: j.baseValues
@@ -1410,7 +1590,16 @@ function importJoint(cfg) {
         jointType: cfg.jointType || 'revolute',
         coupledTarget: cfg.coupledTarget || null,
         coupledRatio: cfg.coupledRatio || 1,
+
+        // ── default สำหรับ .dtwp เก่าที่ยังไม่มี field พวกนี้ ──
+        // scale=1, invert=false, offset=0 → ค่าผ่านตรงๆ เหมือนเดิม ไฟล์เก่าจึงไม่พัง
+        srcTopic: cfg.srcTopic || '',
+        srcPath:  cfg.srcPath  || '',
+        scale:    cfg.scale  ?? 1,
+        offset:   cfg.offset ?? 0,
+        invert:   !!cfg.invert,
     };
+    
 
     state.joints.push(joint);
     applyJointValue(joint, cfg.value || 0);  // restore ค่า joint ที่บันทึกไว้
@@ -1726,14 +1915,58 @@ function updateSimulation() {
 }
 
 // ============================================================
-// MQTT — เชื่อมต่อ HiveMQ Cloud รับ/ส่งค่า joint แบบ realtime
+// MQTT — ผูก joint กับข้อมูล realtime จาก broker
 //
-// Topic format  : robot/joint/{jointId}
-//                 เช่น  robot/joint/joint_0
-// Message format: ตัวเลข string  เช่น  "1.57"
+// ไม่มี topic หรือ payload format ตายตัวในโค้ด — แต่ละ joint กำหนดเองผ่าน
+//   srcTopic  : topic ที่ฟัง (รองรับ wildcard + และ #)
+//   srcPath   : ตำแหน่งค่าใน payload เช่น "actual_q[0]"
+//   scale / invert / offset : แปลงหน่วยและจุดศูนย์ให้ตรงกับ node ในโมเดล
 //
-// Flow: Broker publish → browser subscribe → applyJointValue() → 3D model ขยับ
+// Flow: broker publish → หา joint ที่ topic ตรง → resolvePath → แปลงค่า → 3D ขยับ
 // ============================================================
+
+// ── resolvePath — อ่านค่าจาก payload ตาม path string ──
+//   "actual_q[0]" → payload.actual_q[0]
+//   "data.j1"     → payload.data.j1
+//   ""            → payload ทั้งก้อน (กรณี payload เป็นตัวเลขเดี่ยว)
+function resolvePath(obj, path) {
+    if (!path) return obj;
+    return path.split(/[.\[\]]+/).filter(Boolean)
+               .reduce((o, k) => (o == null ? undefined : o[k]), obj);
+}
+
+// ── topicMatches — เทียบ topic กับ pattern แบบ MQTT wildcard ──
+//   "+" = แทน 1 ระดับ   |   "#" = แทนทุกระดับที่เหลือ (ต้องอยู่ท้ายสุด)
+function topicMatches(pattern, topic) {
+    if (!pattern) return false;
+    const p = pattern.split('/'), t = topic.split('/');
+    for (let i = 0; i < p.length; i++) {
+        if (p[i] === '#') return true;
+        if (i >= t.length) return false;
+        if (p[i] === '+') continue;
+        if (p[i] !== t[i]) return false;
+    }
+    return p.length === t.length;
+}
+
+// ── jointTopics — รวบ topic ที่ต้อง subscribe จาก joint ทั้งหมด (ตัดซ้ำ) ──
+function jointTopics() {
+    return [...new Set(state.joints.map(j => j.srcTopic).filter(Boolean))];
+}
+
+// ── resubscribeJoints — subscribe เพิ่มหลังผู้ใช้แก้ topic ระหว่างที่ต่ออยู่ ──
+function resubscribeJoints() {
+    if (!state.mqttClient || !state.mqttConnected) return;
+    const topics = jointTopics();
+    if (topics.length === 0) return;
+    state.mqttClient.subscribe(topics, (err, granted) => {
+        if (err) { console.error('MQTT subscribe error:', err); return; }
+        console.log('MQTT subscribed:', granted);
+    });
+}
+
+// กัน console ท่วมเวลามีข้อความเข้ามาแต่ไม่มี joint ตัวไหนรับ — เตือนครั้งเดียวต่อ topic
+const warnedTopics = new Set();
 
 // ── connectMQTT — เชื่อมต่อ broker ด้วย WebSocket (wss://) ──
 function connectMQTT() {
@@ -1751,6 +1984,7 @@ function connectMQTT() {
         username:        user || undefined,   // ถ้าว่างไม่ส่งไป
         password:        pass || undefined,
         clean:           true,
+        keepalive:       300,    // 5 นาที — เผื่อ Chrome หรี่ timer ตอนแท็บอยู่เบื้องหลัง
         reconnectPeriod: 3000,   // reconnect อัตโนมัติทุก 3 วินาทีถ้าหลุด
     });
 
@@ -1758,31 +1992,59 @@ function connectMQTT() {
     state.mqttClient.on('connect', () => {
         state.mqttConnected = true;
 
-        // subscribe topic robot/joint/# (# = wildcard = ทุก jointId)
-        state.mqttClient.subscribe('robot/joint/#', (err) => {
-            if (err) console.error('MQTT subscribe error:', err);
-        });
+               
+                // subscribe ตาม srcTopic ของแต่ละ joint — ไม่มี topic ตายตัวในโค้ดอีกต่อไป
+        const topics = jointTopics();
+        if (topics.length === 0) {
+            console.warn('MQTT: ยังไม่มี joint ตัวไหนตั้ง MQTT Topic ไว้ — จะไม่ได้รับข้อมูลเลย');
+        } else {
+            state.mqttClient.subscribe(topics, (err, granted) => {
+                if (err) { console.error('MQTT subscribe error:', err); return; }
+                console.log('MQTT subscribed:', granted);
+            });
+        }
 
         updateMQTTStatus('connected');
         dom.btnMqttConnect.innerHTML =
             '<span class="material-icons-round">link_off</span>Disconnect';
     });
 
-    // ── รับ message จาก broker ──
+        // ── รับ message จาก broker ──
+       // ── รับ message จาก broker ──
+    // ไม่มีชื่อ topic หรือ field ของหุ่นรุ่นใดอยู่ในนี้เลย
+    // ทุกอย่างมาจาก srcTopic / srcPath / scale / invert / offset ที่ตั้งไว้ในแต่ละ joint
     state.mqttClient.on('message', (topic, message) => {
-        // แยก jointId จาก topic เช่น "robot/joint/joint_0" → "joint_0"
-        const jointId = topic.split('/').pop();
-        const value   = parseFloat(message.toString());
+        const text = message.toString();
 
-        if (isNaN(value)) return;   // ป้องกัน message ที่ไม่ใช่ตัวเลข
+        // payload อาจเป็น JSON หรือตัวเลขเดี่ยว — รองรับทั้งสองแบบ
+        let payload;
+        try { payload = JSON.parse(text); }
+        catch (e) { payload = parseFloat(text); }
 
-        // หา joint ที่ตรงกับ id แล้ว apply ค่า (เหมือน drag slider)
-        const joint = state.joints.find(j => j.id === jointId);
-        if (joint) {
-            applyJointValue(joint, value);
-            syncJointUI(joint, joint.value);
+        let matched = 0;
+        for (const joint of state.joints) {
+            if (!topicMatches(joint.srcTopic, topic)) continue;
+
+            const raw = Number(resolvePath(payload, joint.srcPath));
+            if (!Number.isFinite(raw)) continue;   // path ผิด หรือค่าไม่ใช่ตัวเลข
+
+            // แปลงจากหน่วย/จุดศูนย์ของอุปกรณ์ → หน่วย/จุดศูนย์ของ node ในโมเดล
+            let v = raw * (joint.scale ?? 1);
+            if (joint.invert) v = -v;
+            v += (joint.offset ?? 0);
+
+            joint._lastRaw = raw;                  // เก็บไว้ให้ปุ่ม Calibrate ในเฟส 2
+            applyJointValue(joint, v);
+            syncJointUI(joint, joint.value);       // ใช้ joint.value เพราะโดน clamp มาแล้ว
+            matched++;
         }
-    });
+
+        if (matched === 0 && !warnedTopics.has(topic)) {
+            warnedTopics.add(topic);
+            console.warn(`MQTT: ได้ข้อความจาก "${topic}" แต่ไม่มี joint ตัวไหนรับค่า`, payload);
+        }
+    });     
+
 
     // ── เกิด error ──
     state.mqttClient.on('error', (err) => {
@@ -1871,14 +2133,22 @@ function bindEvents() {
     dom.btnAddJoint.addEventListener('click', openAddJointModal);
     dom.modalClose.addEventListener('click', closeModal);
     dom.modalCancel.addEventListener('click', closeModal);
-    dom.modalConfirm.addEventListener('click', addJoint);
+        // ปุ่มยืนยัน — แยกทางตามโหมดที่ modal เปิดอยู่
+    dom.modalConfirm.addEventListener('click', () => {
+        if (state.editingJointId) saveJointEdit();
+        else addJoint();
+    });
 
     // ปิด modal ด้วย Escape หรือ click นอก modal
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
     dom.modalOverlay.addEventListener('click', (e) => { if (e.target === dom.modalOverlay) closeModal(); });
 
     // อัปเดต modal form เมื่อ property หรือ pattern เปลี่ยน
-    dom.jointProperty.addEventListener('change', () => { updateMinMaxDefaults(); updatePivotVisibility(); });
+        dom.jointProperty.addEventListener('change', () => {
+        // โหมดแก้ไข: ห้าม reset min/max ทับค่าที่ผู้ใช้ตั้งไว้
+        if (!state.editingJointId) updateMinMaxDefaults();
+        updatePivotVisibility();
+    });
     dom.jointSimPattern.addEventListener('change', updateSimFreqVisibility);
 
     // ── Simulation controls ──

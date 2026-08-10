@@ -193,7 +193,7 @@
     <div id="modal-overlay" class="modal-overlay hidden">
         <div class="modal">
             <div class="modal-header">
-                <h3><span class="material-icons-round" style="font-size:20px;vertical-align:middle;margin-right:6px;">settings</span>Add Joint</h3>
+                <h3 id="modal-title"><span class="material-icons-round" style="font-size:20px;vertical-align:middle;margin-right:6px;">settings</span>Add Joint</h3>
                 <button id="modal-close" class="btn btn-icon">
                     <span class="material-icons-round">close</span>
                 </button>
@@ -266,9 +266,38 @@
                     </div>
                     <div class="form-group">
                         <label for="joint-step">Step</label>
-                        <input type="number" id="joint-step" value="0.01" step="0.001">
+                                               <input type="number" id="joint-step" value="0.01" step="0.001">
                     </div>
                 </div>
+
+                <!-- ── Realtime binding: ผูก joint กับข้อมูลที่เข้ามาทาง MQTT ── -->
+                <div class="form-group">
+                    <label for="joint-src-topic">
+                        <span class="material-icons-round" style="font-size:14px;vertical-align:middle;">sensors</span>
+                        MQTT Topic
+                    </label>
+                    <input type="text" id="joint-src-topic" placeholder="เช่น ur3/joint_states (เว้นว่าง = ไม่รับค่าจาก MQTT)">
+                    <span class="form-hint">รองรับ wildcard + และ #</span>
+                </div>
+                <div class="form-group">
+                    <label for="joint-src-path">Payload Path</label>
+                    <input type="text" id="joint-src-path" placeholder="เช่น actual_q[0] หรือ data.j1 (เว้นว่าง = payload เป็นตัวเลขเดี่ยว)">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="joint-scale">Scale</label>
+                        <input type="number" id="joint-scale" value="1" step="any">
+                    </div>
+                    <div class="form-group">
+                        <label for="joint-offset">Offset</label>
+                        <input type="number" id="joint-offset" value="0" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="joint-invert">Invert</label>
+                        <input type="checkbox" id="joint-invert" style="width:20px;height:20px;margin-top:8px">
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label for="joint-sim-pattern">Sensor Simulation Pattern</label>
                     <select id="joint-sim-pattern">
