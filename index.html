@@ -64,9 +64,18 @@
                        class="mqtt-input-sm"
                        placeholder="Password">
             </div>
+            <label class="mqtt-discover" title="ฟังทุก topic (#) เพื่อดูว่ามีข้อมูลอะไรเข้ามาบ้าง">
+                <input type="checkbox" id="mqtt-discover" checked>
+                Discover
+            </label>
             <button id="btn-mqtt-connect" class="btn btn-secondary">
                 <span class="material-icons-round">link</span>Connect
             </button>
+            <button id="btn-mqtt-pause" class="btn btn-secondary"
+                    title="หยุด apply ข้อมูลชั่วคราว เพื่อลาก slider ตอน Calibrate">
+                <span class="material-icons-round">pause</span>Pause
+            </button>
+            
             <div id="mqtt-status" class="mqtt-status">
                 <span class="sim-dot"></span>Disconnected
             </div>
@@ -102,6 +111,8 @@
                 <span id="info-meshes">0 meshes</span>
                 <span id="info-nodes">0 nodes</span>
             </div>
+            <!-- สถิติคุณภาพการรับข้อมูล — latency / rate / jitter / ข้อความหาย -->
+            <div id="net-stats"><span>ไม่ได้เชื่อมต่อ</span></div>
         </section>
 
         <!-- Right Panel: Control (Joints / Presets / Animation) -->
@@ -271,6 +282,13 @@
                 </div>
 
                 <!-- ── Realtime binding: ผูก joint กับข้อมูลที่เข้ามาทาง MQTT ── -->
+                   <div class="form-group">
+                    <label>
+                        <span class="material-icons-round" style="font-size:14px;vertical-align:middle;">radar</span>
+                        ข้อมูลที่รับได้ล่าสุด — คลิกเพื่อเลือก
+                    </label>
+                    <div id="payload-inspector" class="payload-inspector"></div>
+                </div>
                 <div class="form-group">
                     <label for="joint-src-topic">
                         <span class="material-icons-round" style="font-size:14px;vertical-align:middle;">sensors</span>

@@ -1052,7 +1052,8 @@ html, body {
 }
 
 /* ===== Reset Button ===== */
-.btn-reset-joint {
+.btn-reset-joint,
+.btn-calib-joint {
     padding: 3px 5px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-color);
@@ -1160,3 +1161,86 @@ html, body {
     color: var(--text-muted, #64748b);
     padding: 2px 0;
 }
+/* ===== Payload Inspector (เฟส 3) ===== */
+.mqtt-discover {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    cursor: pointer;
+}
+.mqtt-discover input { width: 14px; height: 14px; cursor: pointer; }
+
+.payload-inspector {
+    max-height: 190px;
+    overflow-y: auto;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 6px;
+}
+.pi-topic {
+    font-size: 11px;
+    color: var(--node-bone);
+    font-weight: 600;
+    padding: 4px 4px 2px;
+    position: sticky;      /* ชื่อ topic ค้างไว้ตอนเลื่อนดู field ยาวๆ */
+    top: -6px;
+    background: var(--bg-primary);
+}
+.pi-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+}
+.pi-row:hover { background: var(--bg-hover); }
+.pi-row.selected { background: var(--accent-dim); outline: 1px solid var(--accent); }
+.pi-row code { color: var(--text-primary); font-family: monospace; }
+.pi-val {
+    color: var(--text-muted);
+    font-family: monospace;
+    max-width: 45%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ===== Calibrate + Pause (เฟส 2) ===== */
+.btn-calib-joint:hover {
+    background: var(--accent-dim);
+    color: var(--accent-hover);
+    border-color: var(--accent);
+}
+
+/* ตอน pause ให้เห็นชัดว่าข้อมูลหยุดอยู่ ไม่งั้นผู้ใช้จะงงว่าทำไมโมเดลไม่ขยับ */
+#btn-mqtt-pause.paused {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--warning);
+    border-color: var(--warning);
+}
+.joint-card.paused-hint { outline: 1px dashed var(--warning); }
+
+/* ===== Network Stats — วัดคุณภาพการรับข้อมูล ===== */
+#net-stats {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;              /* คนละมุมกับ viewport-info จะได้ไม่ทับกัน */
+    display: flex;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;   /* ตัวเลขไม่ขยับซ้ายขวาตอนค่าเปลี่ยน */
+}
+#net-stats span {
+    background: rgba(15, 17, 23, 0.7);
+    padding: 3px 8px;
+    border-radius: 4px;
+    backdrop-filter: blur(8px);
+}
+#net-stats .net-bad { color: var(--danger); }

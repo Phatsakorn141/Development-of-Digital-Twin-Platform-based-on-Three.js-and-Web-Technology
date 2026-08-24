@@ -48,6 +48,17 @@ const state = {
 
     // ── MQTT ──
     editingJointId: null,   // null = โหมดสร้างใหม่, มีค่า = กำลังแก้ joint ตัวนั้น
+    mqttPaused: false,      // true = ยังรับ message แต่ไม่ apply ลงโมเดล (ใช้ตอน Calibrate)
+    lastPayloads: {},       // topic → { payload, count, ts } สำหรับ Payload Inspector
+    inspectorTimer: null,   // timer อัปเดตค่าสดใน inspector (รันเฉพาะตอนเปิด modal)
+    // ── สถิติคุณภาพการรับข้อมูล ──
+    netStats: {
+        arrivals:  [],      // เวลาที่ข้อความมาถึง (ms) เก็บ 5 วินาทีล่าสุด
+        latencies: [],      // latency ของแต่ละข้อความ (ms)
+        lastSeq:   null,    // seq ล่าสุด ใช้ตรวจข้อความหาย
+        lost:      0,       // จำนวนข้อความที่หายสะสม
+        timer:     null,    // timer วาดแถบทุก 1 วินาที
+    },
     mqttClient: null,       // mqtt.js client instance (null = ยังไม่ได้เชื่อมต่อ)
     mqttConnected: false,   // true = เชื่อมต่อ broker อยู่
 };
@@ -139,9 +150,13 @@ const dom = {
     mqttPanel:      document.getElementById('mqtt-panel'),         // panel กรอก credentials
     mqttUrl:        document.getElementById('mqtt-url'),           // input broker URL
     mqttUser:       document.getElementById('mqtt-user'),          // input username
-    mqttPass:       document.getElementById('mqtt-pass'),          // input password
+    mqttPass:       document.getElementById('mqtt-pass'),          // input password    
     btnMqttConnect: document.getElementById('btn-mqtt-connect'),   // ปุ่ม Connect/Disconnect
+    btnMqttPause:   document.getElementById('btn-mqtt-pause'),    // ปุ่มหยุด/รับข้อมูลต่อ
     mqttStatus:     document.getElementById('mqtt-status'),        // badge แสดงสถานะ
+    mqttDiscover:     document.getElementById('mqtt-discover'),      // checkbox ฟังทุก topic
+    payloadInspector: document.getElementById('payload-inspector'),  // กล่องแสดง payload สด
+    netStats:         document.getElementById('net-stats'),          // แถบสถิติมุมขวาล่าง
 };
 
 // ============================================================
@@ -627,7 +642,7 @@ function openAddJointModal() {
             updateMinMaxDefaults();
         }
     };
-
+    startInspector();
     dom.modalOverlay.classList.remove('hidden');
     dom.jointName.focus();
 }
@@ -702,6 +717,7 @@ function openEditJointModal(jointId) {
     dom.modalConfirm.innerHTML =
         '<span class="material-icons-round" style="font-size:16px;">save</span>Save Changes';
 
+    startInspector();
     dom.modalOverlay.classList.remove('hidden');
     dom.jointName.focus();
 }
@@ -807,6 +823,7 @@ function updatePivotVisibility() {
 // ── closeModal — ปิด Add Joint modal ──
 // ── closeModal — ปิด modal และคืนสภาพกลับเป็นโหมด Add ──
 function closeModal() {
+    stopInspector();
     dom.modalOverlay.classList.add('hidden');
     state.editingJointId = null;     // ออกจากโหมดแก้ไขเสมอ
 
@@ -1133,6 +1150,138 @@ function markBoundNodes() {
     });
 }
 
+// ── calibrateJoint — คำนวณ offset ย้อนกลับจากท่าที่ผู้ใช้ตั้งไว้ ──
+// วิธีใช้: กด Pause → ลาก slider จนโมเดลตรงกับของจริง → กดปุ่มนี้
+// ระบบหาว่า offset ต้องเป็นเท่าไหร่ ค่าดิบถึงจะแปลงออกมาได้ท่านี้พอดี
+// ผู้ใช้จึงไม่ต้องรู้เลยว่า -1.5708 มาจากไหน
+function calibrateJoint(jointId) {
+    const joint = state.joints.find(j => j.id === jointId);
+    if (!joint) return;
+
+    if (!Number.isFinite(joint._lastRaw)) {
+        alert('joint นี้ยังไม่เคยได้รับข้อมูลจาก MQTT\n\n'
+            + 'ต้องกด Connect และผูก MQTT Topic / Payload Path ให้เรียบร้อยก่อน '
+            + 'แล้วรอให้ข้อมูลเข้ามาอย่างน้อย 1 ครั้ง');
+        return;
+    }
+
+    // ค่าที่จะได้ถ้า offset เป็น 0
+    let base = joint._lastRaw * (joint.scale ?? 1);
+    if (joint.invert) base = -base;
+
+    // อยากให้ผลลัพธ์ออกมาเท่ากับ joint.value (ท่าที่ผู้ใช้ตั้งไว้)  →  offset = value - base
+    joint.offset = joint.value - base;
+
+    renderJoints();
+    console.log(`Calibrate "${joint.name}": offset = ${joint.offset.toFixed(4)} rad `
+              + `(${(joint.offset * 180 / Math.PI).toFixed(1)}°)`);
+}
+
+// ── setMqttPaused — หยุด/รับข้อมูลต่อ ──
+// ตอน pause ยังรับ message ปกติ (ยังเก็บ _lastRaw และ payload inspector ยังอัปเดต)
+// แค่ไม่ apply ลงโมเดล ผู้ใช้จึงลาก slider ได้โดยไม่โดนเขียนทับ 10 ครั้ง/วินาที
+function setMqttPaused(paused) {
+    state.mqttPaused = paused;
+    if (dom.btnMqttPause) {
+        dom.btnMqttPause.innerHTML = paused
+            ? '<span class="material-icons-round">play_arrow</span>Resume'
+            : '<span class="material-icons-round">pause</span>Pause';
+        dom.btnMqttPause.classList.toggle('paused', paused);
+    }
+    document.querySelectorAll('.joint-card')
+            .forEach(c => c.classList.toggle('paused-hint', paused));
+}
+
+// ============================================================
+// Network Stats — วัดคุณภาพการรับข้อมูล (latency / rate / jitter / ข้อความหาย)
+//
+// วัดได้เฉพาะช่วง bridge.py → เบราว์เซอร์ เพราะสองฝั่งอยู่เครื่องเดียวกัน
+// ใช้นาฬิกาตัวเดียวกัน จึงลบเวลากันได้ตรงๆ
+// ส่วนช่วง URSim → bridge วัดเป็น ms ไม่ได้ (นาฬิกาใน VM คนละตัว)
+// แต่ดูคุณภาพได้จาก jitter กับจำนวนข้อความหายแทน
+// ============================================================
+
+// ── recordNetStats — บันทึกสถิติของข้อความที่เพิ่งมาถึง ──
+// ถูกเรียกทุกข้อความ (10 ครั้ง/วินาที) ต้องเบา ห้ามคำนวณอะไรหนักตรงนี้
+function recordNetStats(payload) {
+    const s = state.netStats;
+    const now = Date.now();
+
+    s.arrivals.push(now);
+
+    if (Number.isFinite(payload?.t_publish)) {
+        s.latencies.push(now - payload.t_publish * 1000);
+    }
+
+    // ข้อความหาย: ต้องใช้ pub_seq (ตัวนับฝั่ง publish) ไม่ใช่ src_seq ของ URScript
+    // เพราะ URScript เดินที่ 20 Hz แต่ bridge publish แค่ 10 Hz
+    // src_seq จึงกระโดดทีละ 2 โดยตั้งใจ ถ้าเอามานับจะกลายเป็นนับข้อความที่ทิ้งเองว่าหาย
+    const seq = Number(payload?.pub_seq);
+    if (Number.isFinite(seq)) {
+        if (s.lastSeq !== null && seq > s.lastSeq + 1) s.lost += seq - s.lastSeq - 1;
+        s.lastSeq = seq;
+    }
+
+    // ตัดข้อมูลเก่ากว่า 5 วินาทีทิ้ง กันหน่วยความจำโตไม่หยุดตอนเปิดค้างไว้นานๆ
+    const cutoff = now - 5000;
+    while (s.arrivals.length && s.arrivals[0] < cutoff) s.arrivals.shift();
+    if (s.latencies.length > 200) s.latencies.splice(0, s.latencies.length - 200);
+}
+
+// ── renderNetStats — วาดแถบสถิติ เรียกทุก 1 วินาที ──
+function renderNetStats() {
+    const el = dom.netStats;
+    if (!el) return;
+
+    if (!state.mqttConnected) {
+        el.innerHTML = '<span>ไม่ได้เชื่อมต่อ</span>';
+        return;
+    }
+
+    const s = state.netStats;
+    const now = Date.now();
+
+    // rate = จำนวนข้อความในช่วง 1 วินาทีล่าสุด
+    const rate = s.arrivals.filter(t => t > now - 1000).length;
+
+    // latency = เฉลี่ย 20 ข้อความล่าสุด (ค่าเดี่ยวแกว่งเกินกว่าจะอ่านได้)
+    const lat = s.latencies.slice(-20);
+    const latAvg = lat.length ? lat.reduce((a, b) => a + b, 0) / lat.length : null;
+
+    // jitter = ส่วนเบี่ยงเบนมาตรฐานของช่วงห่างระหว่างข้อความ
+    // บอกว่าข้อมูล "มาสม่ำเสมอไหม" ซึ่งสำคัญกว่า latency เฉลี่ยสำหรับงาน realtime
+    // — หน่วง 50 ms คงที่ยังดูลื่น แต่หน่วง 20-80 ms สลับไปมาจะเห็นภาพกระตุก
+    const gaps = [];
+    for (let i = 1; i < s.arrivals.length; i++) gaps.push(s.arrivals[i] - s.arrivals[i - 1]);
+    let jitter = null;
+    if (gaps.length > 1) {
+        const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+        jitter = Math.sqrt(gaps.reduce((a, g) => a + (g - mean) ** 2, 0) / gaps.length);
+    }
+
+    const fmt = (v) => v === null ? '—' : v.toFixed(0);
+
+    el.innerHTML =
+        `<span title="เวลาเดินทาง bridge.py → เบราว์เซอร์">⚡ ${fmt(latAvg)} ms</span>` +
+        `<span title="ข้อความที่ได้รับต่อวินาที">📶 ${rate} Hz</span>` +
+        `<span title="ความสม่ำเสมอของช่วงห่างระหว่างข้อความ">〰 ±${fmt(jitter)} ms</span>` +
+        `<span class="${s.lost > 0 ? 'net-bad' : ''}" title="ข้อความที่หายระหว่างทาง (ดูจาก seq)">✉ ${s.lost}</span>`;
+}
+
+// ── start/stopNetStats — เปิด/ปิดการวัด ──
+function startNetStats() {
+    const s = state.netStats;
+    s.arrivals = []; s.latencies = []; s.lastSeq = null; s.lost = 0;   // เริ่มนับใหม่ทุกครั้งที่ต่อ
+    clearInterval(s.timer);
+    s.timer = setInterval(renderNetStats, 1000);
+    renderNetStats();
+}
+function stopNetStats() {
+    clearInterval(state.netStats.timer);
+    state.netStats.timer = null;
+    renderNetStats();
+}
+
 // ============================================================
 // Joint Rendering — สร้าง HTML card สำหรับแต่ละ joint
 // รวม slider, number input, step buttons, reset, remove, show-nodes
@@ -1212,6 +1361,9 @@ function renderJoints() {
                         value="${joint.value.toFixed(3)}" step="${joint.step}"
                         ${isContinuous ? '' : `min="${joint.min}" max="${joint.max}"`}>
                     ${degDisplay}
+                    <button class="btn-calib-joint" data-id="${joint.id}" title="Calibrate — ตั้ง offset จากท่าปัจจุบัน">
+                        <span class="material-icons-round" style="font-size:14px">my_location</span>
+                    </button>
                     <button class="btn-reset-joint" data-id="${joint.id}" title="Reset เป็น 0">
                         <span class="material-icons-round" style="font-size:14px">restart_alt</span>
                     </button>
@@ -1266,6 +1418,9 @@ function renderJoints() {
                 if (slider) slider.value = joint.value;
             });
         });
+        
+        // ── Event: calibrate → คำนวณ offset จากท่าปัจจุบัน ──
+        card.querySelector('.btn-calib-joint').addEventListener('click', () => calibrateJoint(joint.id));
 
         // ── Event: reset → ค่ากลับ 0 ──
         card.querySelector('.btn-reset-joint').addEventListener('click', () => {
@@ -1968,6 +2123,79 @@ function resubscribeJoints() {
 // กัน console ท่วมเวลามีข้อความเข้ามาแต่ไม่มี joint ตัวไหนรับ — เตือนครั้งเดียวต่อ topic
 const warnedTopics = new Set();
 
+// ── flattenPaths — แตก payload เป็นรายการ path → ค่า ──
+// { actual_q:[1,2], robot:"ur3" }
+//   → [["actual_q[0]",1], ["actual_q[1]",2], ["robot","ur3"]]
+// path ที่ได้ใช้กับ resolvePath() ได้ตรงๆ — เป็นคู่ผกผันกัน
+function flattenPaths(obj, prefix = '', out = []) {
+    if (out.length > 200) return out;                     // กัน payload ยักษ์ทำเบราว์เซอร์ค้าง
+    if (obj === null || typeof obj !== 'object') { out.push([prefix, obj]); return out; }
+    if (Array.isArray(obj)) {
+        obj.forEach((v, i) => flattenPaths(v, `${prefix}[${i}]`, out));
+    } else {
+        for (const [k, v] of Object.entries(obj)) {
+            flattenPaths(v, prefix ? `${prefix}.${k}` : k, out);
+        }
+    }
+    return out;
+}
+
+// ── renderPayloadInspector — แสดง payload สด ให้คลิกเลือก field ──
+function renderPayloadInspector() {
+    const box = dom.payloadInspector;
+    if (!box) return;
+
+    const topics = Object.keys(state.lastPayloads).sort();
+    if (topics.length === 0) {
+        box.innerHTML = '<span class="form-hint">ยังไม่ได้รับข้อมูล — กด Connect โดยเปิด Discover ไว้ แล้วรอให้อุปกรณ์ส่งข้อมูลเข้ามา</span>';
+        return;
+    }
+
+    box.innerHTML = '';
+    for (const topic of topics) {
+        const entry = state.lastPayloads[topic];
+
+        const head = document.createElement('div');
+        head.className = 'pi-topic';
+        head.textContent = `${topic}  (${entry.count} msg)`;
+        box.appendChild(head);
+
+        for (const [path, value] of flattenPaths(entry.payload)) {
+            const row = document.createElement('div');
+            row.className = 'pi-row';
+            row.title = 'คลิกเพื่อผูก joint นี้กับค่านี้';
+            row.innerHTML =
+                `<code>${escapeHtml(path || '(payload ทั้งก้อน)')}</code>` +
+                `<span class="pi-val">${escapeHtml(String(value))}</span>`;
+
+            // ไฮไลต์จากค่าที่อยู่ในช่องจริง ไม่ได้จำ state แยก
+            // → วาดใหม่ทุก 800ms แล้วไฮไลต์ไม่หาย
+            if (topic === dom.jointSrcTopic.value && path === dom.jointSrcPath.value) {
+                row.classList.add('selected');
+            }
+
+            row.addEventListener('click', () => {
+                dom.jointSrcTopic.value = topic;
+                dom.jointSrcPath.value  = path;
+                renderPayloadInspector();
+            });
+            box.appendChild(row);
+        }
+    }
+}
+
+// ── start/stopInspector — อัปเดตค่าสดเฉพาะตอน modal เปิดอยู่ ──
+// ไม่ให้ timer วิ่งทิ้งไว้เปล่าๆ ตอนปิด modal
+function startInspector() {
+    renderPayloadInspector();
+    clearInterval(state.inspectorTimer);
+    state.inspectorTimer = setInterval(renderPayloadInspector, 800);
+}
+function stopInspector() {
+    clearInterval(state.inspectorTimer);
+    state.inspectorTimer = null;
+}
+
 // ── connectMQTT — เชื่อมต่อ broker ด้วย WebSocket (wss://) ──
 function connectMQTT() {
     const url  = dom.mqttUrl.value.trim();
@@ -1994,9 +2222,15 @@ function connectMQTT() {
 
                
                 // subscribe ตาม srcTopic ของแต่ละ joint — ไม่มี topic ตายตัวในโค้ดอีกต่อไป
-        const topics = jointTopics();
+               // topic ที่ joint ผูกไว้ + "#" ถ้าเปิด Discover (ฟังทุก topic เพื่อสำรวจ)
+        const bound  = jointTopics();
+        const topics = dom.mqttDiscover?.checked ? [...new Set([...bound, '#'])] : bound;
+
+        if (bound.length === 0) {
+            console.warn('MQTT: ยังไม่มี joint ตัวไหนตั้ง MQTT Topic — 3D ยังไม่ขยับ แต่ Discover จะเก็บ payload ไว้ให้เลือกใน Add/Edit Joint');
+        }
         if (topics.length === 0) {
-            console.warn('MQTT: ยังไม่มี joint ตัวไหนตั้ง MQTT Topic ไว้ — จะไม่ได้รับข้อมูลเลย');
+            console.warn('MQTT: ไม่มี topic ให้ subscribe เลย');
         } else {
             state.mqttClient.subscribe(topics, (err, granted) => {
                 if (err) { console.error('MQTT subscribe error:', err); return; }
@@ -2005,6 +2239,7 @@ function connectMQTT() {
         }
 
         updateMQTTStatus('connected');
+        startNetStats();
         dom.btnMqttConnect.innerHTML =
             '<span class="material-icons-round">link_off</span>Disconnect';
     });
@@ -2021,6 +2256,15 @@ function connectMQTT() {
         try { payload = JSON.parse(text); }
         catch (e) { payload = parseFloat(text); }
 
+        // เก็บ payload ล่าสุดต่อ topic ไว้ให้ Payload Inspector
+        const rec = state.lastPayloads[topic] || { count: 0 };
+        rec.payload = payload;
+        rec.count++;
+        rec.ts = Date.now();
+        state.lastPayloads[topic] = rec;
+
+        recordNetStats(payload);
+
         let matched = 0;
         for (const joint of state.joints) {
             if (!topicMatches(joint.srcTopic, topic)) continue;
@@ -2033,10 +2277,13 @@ function connectMQTT() {
             if (joint.invert) v = -v;
             v += (joint.offset ?? 0);
 
-            joint._lastRaw = raw;                  // เก็บไว้ให้ปุ่ม Calibrate ในเฟส 2
+                        joint._lastRaw = raw;   // เก็บค่าดิบไว้เสมอ แม้ตอน pause — Calibrate ต้องใช้
+            matched++;
+
+            if (state.mqttPaused) continue;   // pause = ไม่แตะโมเดล ผู้ใช้จะได้ลาก slider ได้
+
             applyJointValue(joint, v);
             syncJointUI(joint, joint.value);       // ใช้ joint.value เพราะโดน clamp มาแล้ว
-            matched++;
         }
 
         if (matched === 0 && !warnedTopics.has(topic)) {
@@ -2067,6 +2314,7 @@ function disconnectMQTT() {
         state.mqttClient.end();   // ปิด WebSocket cleanly
         state.mqttClient    = null;
         state.mqttConnected = false;
+        stopNetStats();
         updateMQTTStatus('disconnected');
         dom.btnMqttConnect.innerHTML =
             '<span class="material-icons-round">link</span>Connect';
@@ -2186,11 +2434,16 @@ function bindEvents() {
         dom.mqttPanel.classList.toggle('hidden');
     });
 
-    // ปุ่ม Connect/Disconnect → สลับระหว่างเชื่อมต่อและตัดการเชื่อมต่อ
+        // ปุ่ม Connect/Disconnect → สลับระหว่างเชื่อมต่อและตัดการเชื่อมต่อ
     dom.btnMqttConnect.addEventListener('click', () => {
         if (state.mqttConnected) disconnectMQTT();
         else connectMQTT();
     });
+
+    // ปุ่ม Pause — หยุด apply ข้อมูลชั่วคราวเพื่อ Calibrate
+    if (dom.btnMqttPause) {
+        dom.btnMqttPause.addEventListener('click', () => setMqttPaused(!state.mqttPaused));
+    }
 }
 
 // ============================================================
