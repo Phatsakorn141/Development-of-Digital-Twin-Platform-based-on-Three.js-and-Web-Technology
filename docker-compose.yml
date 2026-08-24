@@ -1,0 +1,12 @@
+services:
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: dt-mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"   # TCP        — bridge.py ใช้
+      - "9001:9001"   # WebSocket  — เบราว์เซอร์ใช้
+    volumes:
+      # Mosquitto 2.x ไม่เปิด listener ใดๆ ถ้าไม่มี config
+      # ต้อง mount ไฟล์ตั้งค่าเข้าไปเสมอ
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro

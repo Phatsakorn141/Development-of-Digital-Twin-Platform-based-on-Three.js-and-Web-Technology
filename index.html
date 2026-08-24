@@ -51,10 +51,14 @@
         <!-- ซ่อนไว้ก่อน เปิดด้วยปุ่ม MQTT ด้านบน -->
         <div id="mqtt-panel" class="mqtt-panel hidden">
             <div class="mqtt-fields">
+                <!-- ค่าเริ่มต้น = Mosquitto ในเครื่อง (docker compose up -d)
+                     ถ้าจะใช้ cloud broker ให้พิมพ์ทับ เช่น
+                     wss://xxxx.s1.eu.hivemq.cloud:8884/mqtt แล้วกรอก user/pass ด้วย -->
                 <input id="mqtt-url"
                        type="text"
                        class="mqtt-input"
-                       placeholder="wss://xxxx.s1.eu.hivemq.cloud:8884/mqtt">
+                       value="ws://localhost:9001"
+                       placeholder="ws://localhost:9001  หรือ  wss://xxxx.hivemq.cloud:8884/mqtt">
                 <input id="mqtt-user"
                        type="text"
                        class="mqtt-input-sm"
