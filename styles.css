@@ -1244,3 +1244,17 @@ html, body {
     backdrop-filter: blur(8px);
 }
 #net-stats .net-bad { color: var(--danger); }
+
+/* ===== Server project list ===== */
+.srv-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+.srv-row:hover { background: var(--bg-hover); }
+.srv-name { color: var(--text-primary); font-weight: 500; }
+.srv-meta { color: var(--text-muted); font-size: 11px; text-align: right; }

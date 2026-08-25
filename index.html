@@ -130,6 +130,12 @@
                 <button id="btn-export-project" class="btn btn-icon" title="Export Project (.dtwp)" disabled>
                     <span class="material-icons-round">download</span>
                 </button>
+                <button id="btn-open-server" class="btn btn-icon" title="Open from server">
+                    <span class="material-icons-round">cloud_download</span>
+                </button>
+                <button id="btn-save-server" class="btn btn-icon" title="Save to server">
+                    <span class="material-icons-round">cloud_upload</span>
+                </button>
                 <input type="file" id="project-file-input" accept=".dtwp,.json" style="display:none">
             </div>
             <!-- Tab Row -->
@@ -363,7 +369,20 @@
             </div>
         </div>
     </div>
-
+    <!-- กล่องเลือก project จาก server -->
+    <div id="server-overlay" class="modal-overlay hidden">
+        <div class="modal" style="max-width:520px">
+            <div class="modal-header">
+                <h3><span class="material-icons-round" style="font-size:20px;vertical-align:middle;margin-right:6px;">cloud</span>Open from server</h3>
+                <button id="server-close" class="btn btn-icon">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="server-list" class="payload-inspector" style="max-height:320px"></div>
+            </div>
+        </div>
+    </div>
     <!-- Scripts -->
     <script type="importmap">
     {

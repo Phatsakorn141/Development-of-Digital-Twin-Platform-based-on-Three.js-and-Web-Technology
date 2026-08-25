@@ -10,3 +10,53 @@ services:
       # Mosquitto 2.x ไม่เปิด listener ใดๆ ถ้าไม่มี config
       # ต้อง mount ไฟล์ตั้งค่าเข้าไปเสมอ
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  db:
+    image: postgres:17-alpine
+    container_name: dt-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       digitaltwin
+      POSTGRES_USER:     twin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-twinpass}
+    ports:
+      - "5432:5432"     # เปิดไว้ให้ต่อด้วย DBeaver/pgAdmin ดูข้อมูลได้
+    volumes:
+      # named volume — ข้อมูลไม่หายเวลา docker compose down
+      - pgdata:/var/lib/postgresql/data
+      # .sql ในโฟลเดอร์นี้ถูกรันอัตโนมัติ "ครั้งแรกที่สร้าง volume เท่านั้น"
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U twin -d digitaltwin"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    container_name: dt-api
+    restart: unless-stopped
+    environment:
+      # ชื่อ host = ชื่อ service ใน compose ไม่ใช่ localhost
+      DATABASE_URL: postgres://twin:${POSTGRES_PASSWORD:-twinpass}@db:5432/digitaltwin
+      MQTT_URL:     mqtt://mqtt:1883
+      PORT:         3001
+      # ── ตั้งค่าการเก็บข้อมูล ──
+      LOG_TOPICS:     "#"                              # ฟังทุก topic
+      LOG_HZ:         "5"                              # เก็บ 5 ครั้ง/วินาที (เว็บยังได้ 10 Hz)
+      RETENTION_DAYS: "7"                              # ลบข้อมูลเกิน 7 วัน
+      DROP_FIELDS:    "target_q,track_err,tcp_force"   # ค่าซ้ำและค่าศูนย์ ตัดทิ้งลดขนาดครึ่งหนึ่ง
+      MODELS_DIR:     /data/models                     # ตรงกับ volume modelfiles
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy    # รอ DB พร้อมจริงก่อนค่อยสตาร์ท
+      mqtt:
+        condition: service_started
+    volumes:
+      - modelfiles:/data/models       # ที่เก็บไฟล์ .glb (ใช้ชุด 4)
+
+volumes:
+  pgdata:
+  modelfiles:

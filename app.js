@@ -46,6 +46,12 @@ const state = {
     animStartTime: 0,       // timestamp ตอน play (ใช้คำนวณ elapsed)
     animLoop: false,        // true = loop ต่อเนื่องเมื่อถึง keyframe สุดท้าย
 
+    // ── Project / Model บน server ──
+    modelBlob:   null,   // ไฟล์ .glb ที่โหลดอยู่ — เก็บไว้ส่งขึ้น server ตอน Save
+    modelId:     null,   // id โมเดลบน server (null = ยังไม่เคยอัป)
+    projectId:   null,   // id project ที่เปิดอยู่ (null = ยังไม่เคยบันทึก)
+    projectName: '',     // ชื่อ project
+
     // ── MQTT ──
     editingJointId: null,   // null = โหมดสร้างใหม่, มีค่า = กำลังแก้ joint ตัวนั้น
     mqttPaused: false,      // true = ยังรับ message แต่ไม่ apply ลงโมเดล (ใช้ตอน Calibrate)
@@ -158,6 +164,11 @@ const dom = {
     mqttDiscover:     document.getElementById('mqtt-discover'),      // checkbox ฟังทุก topic
     payloadInspector: document.getElementById('payload-inspector'),  // กล่องแสดง payload สด
     netStats:         document.getElementById('net-stats'),          // แถบสถิติมุมขวาล่าง
+    btnSaveServer:  document.getElementById('btn-save-server'),   // ปุ่มบันทึกขึ้น server
+    btnOpenServer:  document.getElementById('btn-open-server'),   // ปุ่มเปิดจาก server
+    serverOverlay:  document.getElementById('server-overlay'),    // กล่องเลือก project
+    serverList:     document.getElementById('server-list'),
+    serverClose:    document.getElementById('server-close'),
 };
 
 // ============================================================
@@ -242,9 +253,14 @@ function animate() {
 // ============================================================
 // Model Loading — โหลด GLB/GLTF จาก File object ที่ user เลือก
 // ============================================================
-function loadModel(file) {
+function loadModel(file, onLoaded) {
     const loader = new GLTFLoader();
     const url = URL.createObjectURL(file);   // สร้าง blob URL ชั่วคราวจาก file
+
+    // เก็บตัวไฟล์ไว้ — ตอน Save ขึ้น server ต้องมี blob ส่งไป
+    // ถ้าไม่เก็บ พอโหลดเสร็จ file จะหลุดมือไปเลย ไม่มีทางเอากลับมาได้
+    state.modelBlob = file;
+    state.modelId   = null;   // โหลดไฟล์ใหม่ = ยังไม่รู้ว่าตรงกับโมเดลไหนบน server
 
     loader.load(url, (gltf) => {
         // ── ถ้ามี model เก่าอยู่ ให้ลบออกและ dispose memory ก่อน ──
@@ -306,6 +322,11 @@ function loadModel(file) {
         dom.viewportOverlay.classList.add('hidden');     // ซ่อน "No Model Loaded" overlay
         dom.simControls.classList.remove('hidden');       // แสดง simulation controls
         URL.revokeObjectURL(url);                         // คืน memory blob URL
+
+        // บอกผู้เรียกว่าโหลดเสร็จแล้ว
+        // Open from server ต้องรอตรงนี้ก่อนใส่ joint เพราะ importJoint หา node ด้วยชื่อ
+        // ถ้าใส่ก่อนโมเดลพร้อมจะหา ShoulderBone ไม่เจอแล้ว import ล้มทั้ง 6 ตัว
+        if (typeof onLoaded === 'function') onLoaded();
     }, undefined, (error) => {
         console.error('Error loading model:', error);
         alert('Failed to load model. Please check that the file is a valid GLTF/GLB.');
@@ -1573,8 +1594,12 @@ function updatePresetControls() {
 // ============================================================
 
 // ── exportProject — serialize state เป็น JSON และ download ──
-function exportProject() {
-    const data = {
+// ── buildProjectData — ประกอบข้อมูล project จาก state ปัจจุบัน ──
+// แยกออกมาเพื่อให้ Export ไฟล์ กับ Save ขึ้น server ใช้ตัวเดียวกัน
+// ถ้าไม่แยก เวลาเพิ่ม field ใหม่ (แบบที่เพิ่งเพิ่ม unit ไป) จะต้องแก้ 2 ที่
+// แล้วลืมที่หนึ่ง กลายเป็นบั๊กที่หายากมาก
+function buildProjectData() {
+    return {
         version: 1,
         exportedAt: new Date().toISOString(),
         jointIdCounter: state.jointIdCounter,
@@ -1612,6 +1637,11 @@ function exportProject() {
         presets: state.presets,
         keyframes: state.keyframes,
     };
+}
+
+// ── exportProject — ดาวน์โหลดเป็นไฟล์ .dtwp ──
+function exportProject() {
+    const data = buildProjectData();
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1619,47 +1649,176 @@ function exportProject() {
     URL.revokeObjectURL(url);
 }
 
-// ── importProject — อ่านไฟล์ .dtwp และ restore joints/presets/keyframes ──
+// ── applyProjectData — ใส่ joint/preset/keyframe จาก object ลง state ──
+// รับ object ตรงๆ ไม่ผูกกับการอ่านไฟล์
+// ใช้ร่วมกันทั้ง Import จากไฟล์ และ Open จาก server — ตรรกะเดิมทุกบรรทัด แค่ย้ายที่
+// คืน { total, ok, failed } ให้ผู้เรียกไปแจ้งผลเอง
+function applyProjectData(data) {
+    if (!data || !Array.isArray(data.joints)) throw new Error('รูปแบบข้อมูล project ไม่ถูกต้อง');
+
+    // ── ลบ joint เก่าทั้งหมดก่อน import ใหม่ ──
+    const ids = state.joints.map(j => j.id);
+    for (const id of ids) removeJoint(id);
+
+    // ── Restore counter จากไฟล์ เพื่อให้ id ต่อเนื่อง ──
+    if (data.jointIdCounter)    state.jointIdCounter    = data.jointIdCounter;
+    if (data.presetIdCounter)   state.presetIdCounter   = data.presetIdCounter;
+    if (data.keyframeIdCounter) state.keyframeIdCounter = data.keyframeIdCounter;
+
+    // ── เรียง joint จากมาก → น้อย nodeUUIDs (parent joint ก่อน child joint) ──
+    // เหตุผล: joint ที่มี node มากกว่าคือ parent
+    // ถ้า import child ก่อน parent จะพยายาม attach node ที่ยังไม่มี pivotGroup parent
+    // ทำให้ตำแหน่งผิด
+    const sortedJoints = [...data.joints].sort(
+        (a, b) => (b.nodeUUIDs?.length || 0) - (a.nodeUUIDs?.length || 0)
+    );
+    let failed = 0;
+    for (const cfg of sortedJoints) { if (!importJoint(cfg)) failed++; }
+
+    state.presets   = data.presets   || [];
+    state.keyframes = data.keyframes || [];
+
+    markBoundNodes(); renderJoints(); renderPresets(); renderKeyframes();
+    updateSelectionCount(); updatePresetControls(); updateAnimControls();
+
+    const total = data.joints.length;
+    return { total, ok: total - failed, failed };
+}
+
+// ── importProject — อ่านไฟล์ .dtwp แล้วส่งต่อให้ applyProjectData ──
 function importProject(file) {
     if (!state.model) { alert('Please load a 3D model first, then import the project file.'); return; }
     const reader = new FileReader();
     reader.onload = (e) => {
         try {
             const data = JSON.parse(e.target.result);
-            if (!data.version || !Array.isArray(data.joints)) { alert('Invalid project file.'); return; }
-
-            // ── ลบ joint เก่าทั้งหมดก่อน import ใหม่ ──
-            const ids = state.joints.map(j => j.id);
-            for (const id of ids) removeJoint(id);
-
-            // ── Restore counter จากไฟล์ เพื่อให้ id ต่อเนื่อง ──
-            if (data.jointIdCounter) state.jointIdCounter = data.jointIdCounter;
-            if (data.presetIdCounter) state.presetIdCounter = data.presetIdCounter;
-            if (data.keyframeIdCounter) state.keyframeIdCounter = data.keyframeIdCounter;
-
-            // ── เรียง joint จากมาก → น้อย nodeUUIDs (parent joint ก่อน child joint) ──
-            // เหตุผล: joint ที่มี node มากกว่าคือ parent
-            // ถ้า import child ก่อน parent จะพยายาม attach node ที่ยังไม่มี pivotGroup parent
-            // ทำให้ตำแหน่งผิด
-            const sortedJoints = [...data.joints].sort(
-                (a, b) => (b.nodeUUIDs?.length || 0) - (a.nodeUUIDs?.length || 0)
-            );
-            let failed = 0;
-            for (const cfg of sortedJoints) { if (!importJoint(cfg)) failed++; }
-
-            state.presets = data.presets || [];
-            state.keyframes = data.keyframes || [];
-
-            markBoundNodes(); renderJoints(); renderPresets(); renderKeyframes();
-            updateSelectionCount(); updatePresetControls(); updateAnimControls();
-
-            const total = data.joints.length, ok = total - failed;
+            const { total, ok, failed } = applyProjectData(data);
             alert(failed === 0
                 ? `Imported: ${ok} joint(s), ${state.presets.length} preset(s), ${state.keyframes.length} keyframe(s).`
                 : `Imported ${ok}/${total} joints (${failed} failed). Presets and keyframes restored.`);
         } catch (err) { alert('Failed to read project file: ' + err.message); }
     };
     reader.readAsText(file);
+}
+
+// ============================================================
+// Server — บันทึก/เปิด project จาก backend
+//
+// แก้ปัญหาที่ต้องพก .glb 9.5 MB กับ .dtwp ไปไหนมาไหน
+// และปัญหาที่จำไม่ได้ว่าไฟล์คู่ไหนไปด้วยกัน — model_id ผูกให้แล้วที่ฝั่ง DB
+// ============================================================
+
+// เว็บเสิร์ฟจาก :3000 แต่ API อยู่ :3001 — คนละ origin ต้องระบุเต็ม
+// วันหน้าถ้าเอาขึ้น server จริงแก้ที่เดียวตรงนี้
+const API_BASE = 'http://localhost:3001';
+
+// ── saveToServer — อัปโมเดล (ถ้ายังไม่เคยอัป) แล้วบันทึก project ──
+async function saveToServer() {
+    if (!state.model)     { alert('ยังไม่ได้โหลดโมเดล'); return; }
+    if (!state.modelBlob) { alert('ไม่พบไฟล์โมเดล — ลอง Upload ใหม่อีกครั้ง'); return; }
+
+    const name = prompt('ชื่อ project', state.projectName || 'UR3');
+    if (!name) return;
+
+    try {
+        // ── 1. อัปโมเดลถ้ายังไม่เคยอัป ──
+        // server เช็ค sha256 ให้ ถ้าไฟล์เดิมจะคืน id เก่ามาไม่เก็บซ้ำ
+        if (!state.modelId) {
+            const fd = new FormData();
+            fd.append('file', state.modelBlob, state.modelBlob.name || 'model.glb');
+            const r = await fetch(`${API_BASE}/api/models`, { method: 'POST', body: fd });
+            if (!r.ok) throw new Error(`อัปโมเดลไม่สำเร็จ (${r.status})`);
+            const m = await r.json();
+            state.modelId = m.id;
+            console.log(m.reused ? '[SRV] ใช้โมเดลเดิมบน server' : '[SRV] อัปโมเดลใหม่', m.id);
+        }
+
+        // ── 2. บันทึก project ──
+        // ส่ง projectId ไปด้วยถ้ามี → เขียนทับตัวเดิม ไม่สร้างซ้ำทุกครั้งที่กด Save
+        const r2 = await fetch(`${API_BASE}/api/projects`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id:       state.projectId || undefined,
+                name,
+                model_id: state.modelId,
+                data:     buildProjectData(),
+            }),
+        });
+        if (!r2.ok) throw new Error(`บันทึก project ไม่สำเร็จ (${r2.status})`);
+        const p = await r2.json();
+
+        state.projectId   = p.id;
+        state.projectName = p.name;
+        alert(`บันทึกแล้ว: ${p.name}`);
+    } catch (e) {
+        alert('บันทึกไม่สำเร็จ: ' + e.message);
+    }
+}
+
+// ── openServerDialog — ดึงรายชื่อ project มาแสดงให้เลือก ──
+async function openServerDialog() {
+    try {
+        const r = await fetch(`${API_BASE}/api/projects`);
+        if (!r.ok) throw new Error(`ดึงรายการไม่สำเร็จ (${r.status})`);
+        const rows = await r.json();
+
+        dom.serverList.innerHTML = '';
+        if (rows.length === 0) {
+            dom.serverList.innerHTML = '<span class="form-hint">ยังไม่มี project บน server — กด ☁️⬆️ เพื่อบันทึกอันแรก</span>';
+        }
+        for (const p of rows) {
+            const row = document.createElement('div');
+            row.className = 'srv-row';
+            row.innerHTML =
+                `<span class="srv-name">${escapeHtml(p.name)}</span>` +
+                `<span class="srv-meta">${escapeHtml(p.model_filename || 'ไม่มีโมเดล')}<br>` +
+                `${new Date(p.updated_at).toLocaleString()}</span>`;
+            row.addEventListener('click', () => loadFromServer(p.id));
+            dom.serverList.appendChild(row);
+        }
+        dom.serverOverlay.classList.remove('hidden');
+    } catch (e) {
+        alert('เปิดรายการไม่สำเร็จ: ' + e.message);
+    }
+}
+
+// ── loadFromServer — โหลดโมเดล แล้วค่อยใส่ joint ──
+async function loadFromServer(projectId) {
+    try {
+        dom.serverOverlay.classList.add('hidden');
+
+        const r = await fetch(`${API_BASE}/api/projects/${projectId}`);
+        if (!r.ok) throw new Error(`ดึง project ไม่สำเร็จ (${r.status})`);
+        const p = await r.json();
+
+        if (!p.model_id) { alert('project นี้ไม่มีโมเดลผูกอยู่'); return; }
+
+        // ── โหลดไฟล์ .glb มาเป็น Blob ──
+        // loadModel ใช้ URL.createObjectURL อยู่แล้ว ซึ่งรับ Blob ได้ ไม่ต้องแก้อะไร
+        const rf = await fetch(`${API_BASE}/api/models/${p.model_id}/file`);
+        if (!rf.ok) throw new Error(`โหลดโมเดลไม่สำเร็จ (${rf.status})`);
+        const blob = await rf.blob();
+
+        // ── ใส่ joint ใน callback เท่านั้น ──
+        // ถ้าใส่นอก callback จะทำงานก่อนโมเดลโหลดเสร็จ แล้ว importJoint
+        // หา node ตามชื่อไม่เจอ → import ล้มทั้งหมดโดยไม่มี error ชัดเจน
+        loadModel(blob, () => {
+            state.modelId     = p.model_id;      // loadModel เคลียร์เป็น null ไป ต้องตั้งกลับ
+            state.projectId   = p.id;
+            state.projectName = p.name;
+            try {
+                const { total, ok, failed } = applyProjectData(p.data);
+                alert(failed === 0
+                    ? `เปิด "${p.name}" แล้ว — ${ok} joint`
+                    : `เปิด "${p.name}" — ${ok}/${total} joint (ล้มเหลว ${failed})`);
+            } catch (e) {
+                alert('ใส่ joint ไม่สำเร็จ: ' + e.message);
+            }
+        });
+    } catch (e) {
+        alert('เปิด project ไม่สำเร็จ: ' + e.message);
+    }
 }
 
 // ── importJoint — สร้าง joint เดียวจาก config object ที่อ่านจาก .dtwp ──
@@ -2472,6 +2631,14 @@ function bindEvents() {
     if (dom.btnMqttPause) {
         dom.btnMqttPause.addEventListener('click', () => setMqttPaused(!state.mqttPaused));
     }
+
+        // ── Project บน server ──
+    if (dom.btnSaveServer) dom.btnSaveServer.addEventListener('click', saveToServer);
+    if (dom.btnOpenServer) dom.btnOpenServer.addEventListener('click', openServerDialog);
+    if (dom.serverClose)   dom.serverClose.addEventListener('click', () => dom.serverOverlay.classList.add('hidden'));
+    if (dom.serverOverlay) dom.serverOverlay.addEventListener('click', (e) => {
+        if (e.target === dom.serverOverlay) dom.serverOverlay.classList.add('hidden');
+    });
 }
 
 // ============================================================
