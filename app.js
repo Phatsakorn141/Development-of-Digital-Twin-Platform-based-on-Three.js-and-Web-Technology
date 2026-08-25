@@ -114,6 +114,7 @@ const dom = {
     jointScale:    document.getElementById('joint-scale'),       // ตัวคูณแปลงหน่วย
     jointInvert:   document.getElementById('joint-invert'),      // กลับทิศ
     jointOffset:   document.getElementById('joint-offset'),      // เลื่อนจุดศูนย์
+    jointUnit:     document.getElementById('joint-unit'),        // หน่วยของค่าหลังแปลงแล้ว
     simFreqGroup: document.getElementById('sim-freq-group'),            // แถว period (ซ่อนถ้า pattern=none)          // แถว period (ซ่อนถ้า pattern=none)
     jointPivotNode: document.getElementById('joint-pivot-node'),
     pivotGroup: document.getElementById('pivot-group'),                 // แถว pivot dropdown (ซ่อนถ้า single node)
@@ -612,6 +613,7 @@ function openAddJointModal() {
     dom.jointScale.value    = '1';
     dom.jointOffset.value   = '0';
     dom.jointInvert.checked = false;
+    if (dom.jointUnit) dom.jointUnit.value = defaultUnitFor(dom.jointProperty.value);
 
     dom.coupledGroup.style.display = 'none';
     if (dom.pivotManualGroup) dom.pivotManualGroup.style.display = 'none';
@@ -686,6 +688,7 @@ function openEditJointModal(jointId) {
     dom.jointScale.value    = joint.scale  ?? 1;
     dom.jointOffset.value   = joint.offset ?? 0;
     dom.jointInvert.checked = !!joint.invert;
+    if (dom.jointUnit) dom.jointUnit.value = joint.unit ?? defaultUnitFor(joint.property);
 
     // ── dropdown coupled: ตัดตัวเองออก กัน joint ผูกกับตัวเองแล้ว loop ไม่รู้จบ ──
 
@@ -769,6 +772,7 @@ function saveJointEdit() {
     joint.scale  = Number.isFinite(sc) ? sc : 1;
     joint.offset = Number.isFinite(of) ? of : 0;
     joint.invert = dom.jointInvert.checked;
+    joint.unit   = dom.jointUnit ? dom.jointUnit.value : '';
 
     resubscribeJoints();   // เผื่อเพิ่ง/เปลี่ยน topic ระหว่างที่ต่อ broker อยู่
 
@@ -779,6 +783,16 @@ function saveJointEdit() {
     renderJoints();
     updatePresetControls();
     updateAnimControls();
+}
+
+// ── defaultUnitFor — เดาหน่วยเริ่มต้นจาก property ──
+// ใช้เป็นค่าตั้งต้นให้ผู้ใช้เท่านั้น แก้ทีหลังได้เสมอ
+// และใช้เติมย้อนหลังให้ .dtwp เก่าที่ยังไม่มี field unit
+function defaultUnitFor(property) {
+    if (!property) return '';
+    if (property.startsWith('rotation')) return 'rad';
+    if (property.startsWith('position')) return 'm';
+    return '';   // visible ไม่มีหน่วย
 }
 
 // ── updateMinMaxDefaults — set min/max/step default ตาม property ที่เลือก ──
@@ -881,7 +895,7 @@ function addJoint() {
     const scale    = parseFloat(dom.jointScale.value);
     const offset   = parseFloat(dom.jointOffset.value);
     const invert   = dom.jointInvert.checked;
-
+    const unit     = dom.jointUnit ? dom.jointUnit.value : '';
     if (nodeUUIDs.length === 0) return;
 
     // ── บันทึก base value ของแต่ละ node ก่อน joint เปลี่ยนค่า ──
@@ -1000,6 +1014,7 @@ function addJoint() {
         scale:  Number.isFinite(scale)  ? scale  : 1,    // ช่องว่าง → 1 (ไม่แปลงหน่วย)
         offset: Number.isFinite(offset) ? offset : 0,
         invert,
+        unit,
         _pivotNodeUUID: dom.jointPivotNode.value,   // บันทึกไว้ export .dtwp
     };
 
@@ -1117,9 +1132,14 @@ function syncJointUI(joint, value) {
     if (slider) slider.value = value;
     if (numEl)  numEl.value  = value.toFixed(3);
     if (valEl)  valEl.textContent = value.toFixed(3);
-    if (degEl && joint.property.startsWith('rotation')) {
-        // แปลง radian → degree สำหรับแสดง
-        degEl.textContent = `${(value * 180 / Math.PI).toFixed(1)}°`;
+    if (degEl) {
+        // เดิมเดาจาก property ว่า rotation = radian เสมอ ซึ่งจริงเฉพาะกับ UR3
+        // ตอนนี้ดูจาก unit ที่ผู้ใช้ระบุจริง
+        if (joint.unit === 'rad') {
+            degEl.textContent = `${(value * 180 / Math.PI).toFixed(1)}°`;   // องศาอ่านง่ายกว่า
+        } else {
+            degEl.textContent = joint.unit || '';                            // หน่วยอื่นแสดงชื่อหน่วยไปตรงๆ
+        }
     }
     // เพิ่ม class 'simulating' เมื่อ sim กำลังรัน (เปลี่ยนสี card)
     if (cardEl) cardEl.classList.toggle('simulating', state.simRunning);
@@ -1370,7 +1390,7 @@ function renderJoints() {
                 </div>
                 <div class="joint-card-meta">
                     <span class="joint-badge">
-                        <span class="material-icons-round">adjust</span>${joint.property}
+                        <span class="material-icons-round">adjust</span>${joint.property}${joint.unit ? ` · ${escapeHtml(joint.unit)}` : ''}
                     </span>
                     <span class="joint-badge">
                         <span class="material-icons-round">link</span>
@@ -1581,6 +1601,7 @@ function exportProject() {
             scale:    j.scale  ?? 1,
             offset:   j.offset ?? 0,
             invert:   !!j.invert,
+            unit:     j.unit ?? '',
             baseValues: j.baseValues ? Object.fromEntries(j.baseValues) : {},
             // baseValuesByName: lookup base value ด้วยชื่อ node (UUID-independent)
             baseValuesByName: j.baseValues
@@ -1753,6 +1774,8 @@ function importJoint(cfg) {
         scale:    cfg.scale  ?? 1,
         offset:   cfg.offset ?? 0,
         invert:   !!cfg.invert,
+        // .dtwp เก่าไม่มี unit → เดาจาก property ให้ เพื่อไม่ให้การแสดงองศาหายไป
+        unit:     cfg.unit ?? defaultUnitFor(cfg.property),
     };
     
 
@@ -2394,7 +2417,12 @@ function bindEvents() {
     // อัปเดต modal form เมื่อ property หรือ pattern เปลี่ยน
         dom.jointProperty.addEventListener('change', () => {
         // โหมดแก้ไข: ห้าม reset min/max ทับค่าที่ผู้ใช้ตั้งไว้
-        if (!state.editingJointId) updateMinMaxDefaults();
+        if (!state.editingJointId) {
+            updateMinMaxDefaults();
+            // เปลี่ยน unit ตาม property ให้อัตโนมัติ — เฉพาะโหมดสร้างใหม่
+            // โหมดแก้ไขไม่แตะ เพราะผู้ใช้อาจตั้งหน่วยแปลกๆ ไว้เอง
+            if (dom.jointUnit) dom.jointUnit.value = defaultUnitFor(dom.jointProperty.value);
+        }
         updatePivotVisibility();
     });
     dom.jointSimPattern.addEventListener('change', updateSimFreqVisibility);

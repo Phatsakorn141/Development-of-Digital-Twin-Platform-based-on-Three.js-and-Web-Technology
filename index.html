@@ -301,9 +301,27 @@
                     <input type="text" id="joint-src-topic" placeholder="เช่น ur3/joint_states (เว้นว่าง = ไม่รับค่าจาก MQTT)">
                     <span class="form-hint">รองรับ wildcard + และ #</span>
                 </div>
-                <div class="form-group">
+                                <div class="form-group">
                     <label for="joint-src-path">Payload Path</label>
                     <input type="text" id="joint-src-path" placeholder="เช่น actual_q[0] หรือ data.j1 (เว้นว่าง = payload เป็นตัวเลขเดี่ยว)">
+                </div>
+                <div class="form-group">
+                    <label for="joint-unit">
+                        <span class="material-icons-round" style="font-size:14px;vertical-align:middle;">straighten</span>
+                        Unit — หน่วยหลังแปลงด้วย Scale แล้ว
+                    </label>
+                    <select id="joint-unit">
+                        <option value="rad">rad — มุม (เรเดียน)</option>
+                        <option value="m">m — ระยะ (เมตร)</option>
+                        <option value="rad/s">rad/s — ความเร็วเชิงมุม</option>
+                        <option value="m/s">m/s — ความเร็ว</option>
+                        <option value="°C">°C — อุณหภูมิ</option>
+                        <option value="A">A — กระแส</option>
+                        <option value="N">N — แรง</option>
+                        <option value="Nm">Nm — แรงบิด</option>
+                        <option value="">— ไม่มีหน่วย</option>
+                    </select>
+                    <span class="form-hint">ยึดหน่วย SI เป็นหน่วยกลาง — ใช้ Scale แปลงจากหน่วยของอุปกรณ์มาที่นี่</span>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
