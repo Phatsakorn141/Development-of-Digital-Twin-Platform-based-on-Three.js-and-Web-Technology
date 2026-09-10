@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<rtde_config>
+  <recipe key="out">
+    <field name="timestamp"          type="DOUBLE"/>
+    <field name="actual_q"           type="VECTOR6D"/>
+    <field name="actual_qd"          type="VECTOR6D"/>
+    <field name="actual_current"     type="VECTOR6D"/>
+    <field name="actual_TCP_pose"    type="VECTOR6D"/>
+    <field name="actual_TCP_speed"   type="VECTOR6D"/>
+    <field name="actual_TCP_force"   type="VECTOR6D"/>
+    <field name="joint_temperatures" type="VECTOR6D"/>
+  </recipe>
+</rtde_config>

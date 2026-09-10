@@ -45,8 +45,10 @@ CREATE TABLE IF NOT EXISTS raw_messages (
     ts      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     topic   TEXT NOT NULL,
     run_id  TEXT,
+    label   TEXT,          -- คลาสสำหรับฝึก AI (normal, speed_30, ...)
     payload JSONB NOT NULL
 );
+CREATE INDEX IF NOT EXISTS raw_messages_label_idx ON raw_messages (label, ts);
 CREATE INDEX IF NOT EXISTS raw_messages_ts_idx  ON raw_messages (ts DESC);
 CREATE INDEX IF NOT EXISTS raw_messages_run_idx ON raw_messages (run_id, ts DESC);
 

@@ -43,7 +43,7 @@ services:
       PORT:         3001
       # ── ตั้งค่าการเก็บข้อมูล ──
       LOG_TOPICS:     "#"                              # ฟังทุก topic
-      LOG_HZ:         "5"                              # เก็บ 5 ครั้ง/วินาที (เว็บยังได้ 10 Hz)
+      LOG_HZ:         "10"                              # เก็บ 5 ครั้ง/วินาที (เว็บยังได้ 10 Hz)
       RETENTION_DAYS: "7"                              # ลบข้อมูลเกิน 7 วัน
       DROP_FIELDS:    "target_q,track_err,tcp_force"   # ค่าซ้ำและค่าศูนย์ ตัดทิ้งลดขนาดครึ่งหนึ่ง
       MODELS_DIR:     /data/models                     # ตรงกับ volume modelfiles

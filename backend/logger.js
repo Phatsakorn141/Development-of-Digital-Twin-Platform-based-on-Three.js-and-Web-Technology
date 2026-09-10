@@ -57,8 +57,8 @@ export function startLogger(db) {
 
         try {
             await db.query(
-                'INSERT INTO raw_messages (topic, run_id, payload) VALUES ($1, $2, $3)',
-                [topic, payload.run_id ?? null, payload]
+                'INSERT INTO raw_messages (topic, run_id, label, payload) VALUES ($1, $2, $3, $4)',
+                [topic, payload.run_id ?? null, payload.label ?? null, payload]
             );
             saved++;
         } catch (e) {
