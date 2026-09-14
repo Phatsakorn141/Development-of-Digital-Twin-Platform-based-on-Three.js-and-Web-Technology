@@ -1,0 +1,55 @@
+{
+  "measured_at": "2026-09-14T17:43:06.934Z",
+  "model": {
+    "file": "rf.onnx",
+    "bytes": 113416493,
+    "size_mb": 108.2,
+    "n_classes": 8,
+    "classes": [
+      "friction",
+      "gripper_low",
+      "normal",
+      "payload_forced_drop",
+      "payload_heavy",
+      "payload_heavy_drop",
+      "speed_100",
+      "speed_30"
+    ]
+  },
+  "fixture": {
+    "file": "reference.json",
+    "n_windows": 200,
+    "window_len": 125,
+    "n_channels": 23,
+    "n_features": 161
+  },
+  "parity": {
+    "feature_max_abs_diff": 0.00000762939453125,
+    "prob_max_abs_diff": 5.364418029785156e-7,
+    "top1_agreement": 1,
+    "accuracy_vs_truth": 0.95,
+    "top1_matched": 200,
+    "correct": 190
+  },
+  "timing_ms": {
+    "model_load": 28233,
+    "feature_extract_per_window": 0.1748,
+    "inference_p50": 0.1119,
+    "inference_p95": 0.2347,
+    "inference_p99": 0.3592,
+    "end_to_end_per_window": 0.2867,
+    "latency_samples": 50
+  },
+  "environment": {
+    "node": "v22.20.0",
+    "platform": "win32 10.0.26200",
+    "cpu": "12th Gen Intel(R) Core(TM) i7-12650H",
+    "cores": 16,
+    "wasm_threads": 1
+  },
+  "notes": [
+    "latency วัดทีละหน้าต่าง ทิ้ง 10 ครั้งแรกที่ยังไม่ warm เหลือ 50 ครั้ง",
+    "end_to_end = เวลาคำนวณฟีเจอร์ + inference p50 (ต้นฉบับของเพื่อนวัดแค่ inference)",
+    "single-thread WASM เพื่อให้ผลคงที่ทุกครั้ง"
+  ]
+}

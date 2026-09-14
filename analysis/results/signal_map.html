@@ -1,0 +1,151 @@
+<title>UR3 Anomaly Signal Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+<style>
+:root {
+  --ground:#f6f7f6; --panel:#fff; --ink:#151d1b; --ink-2:#4d5a56; --ink-3:#7d8a86;
+  --line:#dfe4e2; --line-2:#c6cecb; --sig:29,111,139; --warn:#b0512a; --warn-bg:#f8ece6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:#0f1413; --panel:#161c1b; --ink:#e6ecea; --ink-2:#9daba6;
+    --ink-3:#71807b; --line:#252e2c; --line-2:#39443f; --sig:109,190,214;
+    --warn:#e08a5f; --warn-bg:#2a1c14;
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#0f1413; --panel:#161c1b; --ink:#e6ecea; --ink-2:#9daba6;
+  --ink-3:#71807b; --line:#252e2c; --line-2:#39443f; --sig:109,190,214;
+  --warn:#e08a5f; --warn-bg:#2a1c14;
+}
+* { box-sizing:border-box }
+body { background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans Thai",system-ui,sans-serif; line-height:1.7; }
+.wrap { max-width:1040px; margin:0 auto; padding:56px 28px 80px; }
+code,.mono,em,.num,u,th code { font-family:"IBM Plex Mono",ui-monospace,monospace }
+.eyebrow { font-size:12px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-3); font-family:"IBM Plex Mono",monospace; margin:0 0 10px }
+h1 { font-size:34px; font-weight:600; line-height:1.25; margin:0 0 14px;
+  text-wrap:balance; letter-spacing:-.01em }
+.lede { font-size:17px; color:var(--ink-2); max-width:62ch; margin:0 0 26px }
+.meta { display:flex; flex-wrap:wrap; gap:10px 26px; padding:16px 0;
+  border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin-bottom:44px }
+.meta div { font-size:13px; color:var(--ink-3) }
+.meta strong { display:block; font-size:19px; color:var(--ink); font-weight:500;
+  font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums }
+h2 { font-size:20px; font-weight:600; margin:52px 0 6px; letter-spacing:-.005em }
+.sub { font-size:14px; color:var(--ink-3); margin:0 0 22px; max-width:64ch }
+.scroll { overflow-x:auto; padding-bottom:6px }
+.hm { display:grid; grid-template-columns:186px repeat(23,minmax(26px,1fr));
+  gap:2px; min-width:820px; align-items:center }
+.hm u { writing-mode:vertical-rl; text-decoration:none; font-size:11px;
+  color:var(--ink-3); height:76px; display:flex; align-items:flex-end;
+  justify-content:center; padding-bottom:4px }
+.corner { height:76px }
+.rl { display:flex; align-items:baseline; gap:7px; justify-content:flex-end;
+  padding-right:11px; height:30px; overflow:hidden }
+.rl span { font-size:13px; font-weight:500; white-space:nowrap }
+.rl code { font-size:10px; color:var(--ink-3); white-space:nowrap }
+.rl em { font-size:11px; font-style:normal; color:var(--ink-3);
+  font-variant-numeric:tabular-nums; min-width:26px; text-align:right }
+.rl.dim span, .rl.dim code { color:var(--warn) }
+.hm i { height:30px; border-radius:2px; background:rgba(var(--sig),var(--a)) }
+table { width:100%; border-collapse:collapse; font-size:13px }
+th { text-align:right; font-weight:500; padding:7px 14px 7px 0; white-space:nowrap;
+  vertical-align:middle; width:1%; }
+th code { display:block; font-size:10px; color:var(--ink-3); font-weight:400 }
+td { padding:7px 0 }
+.barcell { width:100% }
+.bar { display:flex; height:16px; border-radius:2px; overflow:hidden; gap:1px }
+.sg { display:block; min-width:1px }
+.s0 { background:rgba(var(--sig),.22) } .s1 { background:rgba(var(--sig),.42) }
+.s2 { background:rgba(var(--sig),.58) } .s3 { background:rgba(var(--sig),.76) }
+.s4 { background:rgba(var(--sig),1) }
+.num { padding-left:14px; text-align:right; font-variant-numeric:tabular-nums;
+  font-size:13px; width:1%; white-space:nowrap }
+.ch { padding-left:18px; font-size:11px; color:var(--ink-3);
+  font-family:"IBM Plex Mono",monospace; white-space:nowrap; width:1% }
+.legend { display:flex; flex-wrap:wrap; gap:8px 20px; margin:0 0 18px }
+.lg { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ink-2) }
+.lg i { width:11px; height:11px; border-radius:2px; display:block }
+.lg em { font-style:normal; color:var(--ink-3); font-size:10px }
+.find { border-left:3px solid rgba(var(--sig),1); padding:2px 0 2px 20px;
+  margin:30px 0; max-width:66ch }
+.find p { margin:0; font-size:16px; color:var(--ink-2) }
+.find b { color:var(--ink); font-weight:500 }
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+  gap:16px; margin-top:22px }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+  padding:20px 22px }
+.card.bad { border-color:var(--warn); background:var(--warn-bg) }
+.card h3 { margin:0 0 3px; font-size:15px; font-weight:600 }
+.card .tag { font-family:"IBM Plex Mono",monospace; font-size:11px;
+  color:var(--warn); letter-spacing:.04em }
+.card p { margin:11px 0 0; font-size:14px; color:var(--ink-2) }
+.note { margin-top:56px; padding-top:22px; border-top:1px solid var(--line);
+  font-size:13px; color:var(--ink-3); max-width:70ch }
+.note b { color:var(--ink-2); font-weight:500 }
+</style>
+<div class="wrap">
+<p class="eyebrow">occlusion analysis · random forest · 161 features</p>
+<h1>โมเดลใช้สัญญาณไหนตัดสินความผิดปกติแต่ละแบบ</h1>
+<p class="lede">ปิดบังทีละช่องสัญญาณจาก 23 ช่อง แล้ววัดว่าความมั่นใจของโมเดลตกลงเท่าไหร่
+ยิ่งตกมาก แปลว่าโมเดลพึ่งช่องนั้นมากในการตัดสิน</p>
+
+<div class="meta">
+  <div><strong>2,448,566</strong>แถวข้อมูลหุ่นจริง</div>
+  <div><strong>213</strong>รอบการทดลอง</div>
+  <div><strong>8</strong>คลาสที่โมเดลรู้จัก</div>
+  <div><strong>84.0%</strong>ความแม่นบนข้อมูลจริง</div>
+  <div><strong>125 Hz</strong>หน้าต่างละ 1 วินาที</div>
+  <div><strong>72</strong>หน้าต่างที่วัด</div>
+</div>
+
+<h2>ฮีทแมพ ความผิดปกติ × ช่องสัญญาณ</h2>
+<p class="sub">เข้มที่สุดในแต่ละแถว = ช่องที่คลาสนั้นพึ่งมากที่สุด ปรับสเกลแยกรายแถว
+ตัวเลขหลังชื่อคลาสคือความมั่นใจเฉลี่ยตอนไม่ปิดบังอะไรเลย</p>
+<div class="scroll"><div class="hm"><b class="corner"></b><u>q0</u><u>q1</u><u>q2</u><u>q3</u><u>q4</u><u>q5</u><u>i0</u><u>i1</u><u>i2</u><u>i3</u><u>i4</u><u>i5</u><u>tcp_x</u><u>tcp_y</u><u>tcp_z</u><u>tcp_speed</u><u>tcp_force</u><u>fx</u><u>fy</u><u>fz</u><u>tx</u><u>ty</u><u>tz</u><b class="rl"><span>เดินเร็วผิดปกติ</span><code>speed_100</code><em>0.78</em></b><i style="--a:0.08" title="speed_100 · q0 = +0.023"></i><i style="--a:0.09" title="speed_100 · q1 = +0.027"></i><i style="--a:0.09" title="speed_100 · q2 = +0.030"></i><i style="--a:0.09" title="speed_100 · q3 = +0.028"></i><i style="--a:0.08" title="speed_100 · q4 = +0.020"></i><i style="--a:0.11" title="speed_100 · q5 = +0.039"></i><i style="--a:0.15" title="speed_100 · i0 = +0.072"></i><i style="--a:0.11" title="speed_100 · i1 = +0.044"></i><i style="--a:0.18" title="speed_100 · i2 = +0.091"></i><i style="--a:0.15" title="speed_100 · i3 = +0.075"></i><i style="--a:0.19" title="speed_100 · i4 = +0.103"></i><i style="--a:0.21" title="speed_100 · i5 = +0.111"></i><i style="--a:0.08" title="speed_100 · tcp_x = +0.025"></i><i style="--a:0.11" title="speed_100 · tcp_y = +0.041"></i><i style="--a:0.11" title="speed_100 · tcp_z = +0.041"></i><i style="--a:1.00" title="speed_100 · tcp_speed = +0.680"></i><i style="--a:0.27" title="speed_100 · tcp_force = +0.160"></i><i style="--a:0.15" title="speed_100 · fx = +0.072"></i><i style="--a:0.26" title="speed_100 · fy = +0.154"></i><i style="--a:0.27" title="speed_100 · fz = +0.155"></i><i style="--a:0.21" title="speed_100 · tx = +0.112"></i><i style="--a:0.30" title="speed_100 · ty = +0.176"></i><i style="--a:0.10" title="speed_100 · tz = +0.033"></i><b class="rl"><span>เดินช้าผิดปกติ</span><code>speed_30</code><em>0.92</em></b><i style="--a:0.25" title="speed_30 · q0 = +0.050"></i><i style="--a:0.36" title="speed_30 · q1 = +0.077"></i><i style="--a:0.26" title="speed_30 · q2 = +0.053"></i><i style="--a:0.23" title="speed_30 · q3 = +0.044"></i><i style="--a:0.55" title="speed_30 · q4 = +0.127"></i><i style="--a:0.29" title="speed_30 · q5 = +0.060"></i><i style="--a:0.22" title="speed_30 · i0 = +0.042"></i><i style="--a:0.12" title="speed_30 · i1 = +0.016"></i><i style="--a:0.44" title="speed_30 · i2 = +0.099"></i><i style="--a:0.47" title="speed_30 · i3 = +0.106"></i><i style="--a:0.42" title="speed_30 · i4 = +0.093"></i><i style="--a:0.26" title="speed_30 · i5 = +0.054"></i><i style="--a:0.25" title="speed_30 · tcp_x = +0.051"></i><i style="--a:0.35" title="speed_30 · tcp_y = +0.075"></i><i style="--a:0.31" title="speed_30 · tcp_z = +0.065"></i><i style="--a:0.30" title="speed_30 · tcp_speed = +0.062"></i><i style="--a:1.00" title="speed_30 · tcp_force = +0.238"></i><i style="--a:0.27" title="speed_30 · fx = +0.056"></i><i style="--a:0.17" title="speed_30 · fy = +0.031"></i><i style="--a:0.83" title="speed_30 · fz = +0.196"></i><i style="--a:0.15" title="speed_30 · tx = +0.026"></i><i style="--a:0.12" title="speed_30 · ty = +0.017"></i><i style="--a:0.68" title="speed_30 · tz = +0.157"></i><b class="rl"><span>แรงเสียดทาน</span><code>friction</code><em>0.94</em></b><i style="--a:0.10" title="friction · q0 = +0.014"></i><i style="--a:0.15" title="friction · q1 = +0.028"></i><i style="--a:0.11" title="friction · q2 = +0.018"></i><i style="--a:0.23" title="friction · q3 = +0.052"></i><i style="--a:0.19" title="friction · q4 = +0.041"></i><i style="--a:0.11" title="friction · q5 = +0.019"></i><i style="--a:0.28" title="friction · i0 = +0.068"></i><i style="--a:0.13" title="friction · i1 = +0.024"></i><i style="--a:0.49" title="friction · i2 = +0.129"></i><i style="--a:0.33" title="friction · i3 = +0.083"></i><i style="--a:0.40" title="friction · i4 = +0.102"></i><i style="--a:0.36" title="friction · i5 = +0.091"></i><i style="--a:0.09" title="friction · tcp_x = +0.011"></i><i style="--a:0.16" title="friction · tcp_y = +0.032"></i><i style="--a:0.19" title="friction · tcp_z = +0.041"></i><i style="--a:1.00" title="friction · tcp_speed = +0.276"></i><i style="--a:0.56" title="friction · tcp_force = +0.148"></i><i style="--a:0.67" title="friction · fx = +0.181"></i><i style="--a:0.50" title="friction · fy = +0.131"></i><i style="--a:0.12" title="friction · fz = +0.020"></i><i style="--a:0.27" title="friction · tx = +0.064"></i><i style="--a:0.56" title="friction · ty = +0.149"></i><i style="--a:0.99" title="friction · tz = +0.273"></i><b class="rl"><span>บรรทุกหนัก</span><code>payload_heavy</code><em>0.45</em></b><i style="--a:0.08" title="payload_heavy · q0 = +0.007"></i><i style="--a:0.19" title="payload_heavy · q1 = +0.032"></i><i style="--a:0.16" title="payload_heavy · q2 = +0.025"></i><i style="--a:0.18" title="payload_heavy · q3 = +0.030"></i><i style="--a:0.18" title="payload_heavy · q4 = +0.028"></i><i style="--a:0.05" title="payload_heavy · q5 = +0.001"></i><i style="--a:0.18" title="payload_heavy · i0 = +0.030"></i><i style="--a:0.06" title="payload_heavy · i1 = +0.002"></i><i style="--a:0.92" title="payload_heavy · i2 = +0.194"></i><i style="--a:0.28" title="payload_heavy · i3 = +0.051"></i><i style="--a:0.33" title="payload_heavy · i4 = +0.063"></i><i style="--a:0.15" title="payload_heavy · i5 = +0.022"></i><i style="--a:0.07" title="payload_heavy · tcp_x = +0.005"></i><i style="--a:0.12" title="payload_heavy · tcp_y = +0.017"></i><i style="--a:0.13" title="payload_heavy · tcp_z = +0.018"></i><i style="--a:0.52" title="payload_heavy · tcp_speed = +0.105"></i><i style="--a:0.67" title="payload_heavy · tcp_force = +0.139"></i><i style="--a:0.16" title="payload_heavy · fx = +0.024"></i><i style="--a:0.07" title="payload_heavy · fy = +0.004"></i><i style="--a:1.00" title="payload_heavy · fz = +0.212"></i><i style="--a:0.31" title="payload_heavy · tx = +0.058"></i><i style="--a:0.37" title="payload_heavy · ty = +0.072"></i><i style="--a:0.54" title="payload_heavy · tz = +0.109"></i><b class="rl"><span>ของหลุดมือ</span><code>payload_forced_drop</code><em>0.60</em></b><i style="--a:0.12" title="payload_forced_drop · q0 = +0.025"></i><i style="--a:0.14" title="payload_forced_drop · q1 = +0.029"></i><i style="--a:0.10" title="payload_forced_drop · q2 = +0.017"></i><i style="--a:0.12" title="payload_forced_drop · q3 = +0.024"></i><i style="--a:0.17" title="payload_forced_drop · q4 = +0.040"></i><i style="--a:0.11" title="payload_forced_drop · q5 = +0.022"></i><i style="--a:0.27" title="payload_forced_drop · i0 = +0.073"></i><i style="--a:0.12" title="payload_forced_drop · i1 = +0.024"></i><i style="--a:0.26" title="payload_forced_drop · i2 = +0.071"></i><i style="--a:0.33" title="payload_forced_drop · i3 = +0.096"></i><i style="--a:0.21" title="payload_forced_drop · i4 = +0.055"></i><i style="--a:0.31" title="payload_forced_drop · i5 = +0.087"></i><i style="--a:0.10" title="payload_forced_drop · tcp_x = +0.016"></i><i style="--a:0.19" title="payload_forced_drop · tcp_y = +0.046"></i><i style="--a:0.15" title="payload_forced_drop · tcp_z = +0.032"></i><i style="--a:1.00" title="payload_forced_drop · tcp_speed = +0.321"></i><i style="--a:0.32" title="payload_forced_drop · tcp_force = +0.092"></i><i style="--a:0.27" title="payload_forced_drop · fx = +0.074"></i><i style="--a:0.12" title="payload_forced_drop · fy = +0.023"></i><i style="--a:0.16" title="payload_forced_drop · fz = +0.036"></i><i style="--a:0.28" title="payload_forced_drop · tx = +0.078"></i><i style="--a:0.11" title="payload_forced_drop · ty = +0.021"></i><i style="--a:0.40" title="payload_forced_drop · tz = +0.117"></i><b class="rl"><span>แรงจับต่ำ</span><code>gripper_low</code><em>0.60</em></b><i style="--a:0.13" title="gripper_low · q0 = +0.028"></i><i style="--a:0.13" title="gripper_low · q1 = +0.026"></i><i style="--a:0.18" title="gripper_low · q2 = +0.044"></i><i style="--a:0.16" title="gripper_low · q3 = +0.037"></i><i style="--a:0.19" title="gripper_low · q4 = +0.049"></i><i style="--a:0.12" title="gripper_low · q5 = +0.026"></i><i style="--a:0.31" title="gripper_low · i0 = +0.089"></i><i style="--a:0.16" title="gripper_low · i1 = +0.037"></i><i style="--a:0.42" title="gripper_low · i2 = +0.127"></i><i style="--a:0.24" title="gripper_low · i3 = +0.065"></i><i style="--a:0.64" title="gripper_low · i4 = +0.203"></i><i style="--a:0.38" title="gripper_low · i5 = +0.114"></i><i style="--a:0.10" title="gripper_low · tcp_x = +0.017"></i><i style="--a:0.17" title="gripper_low · tcp_y = +0.042"></i><i style="--a:0.21" title="gripper_low · tcp_z = +0.054"></i><i style="--a:0.85" title="gripper_low · tcp_speed = +0.277"></i><i style="--a:0.58" title="gripper_low · tcp_force = +0.182"></i><i style="--a:0.38" title="gripper_low · fx = +0.112"></i><i style="--a:0.15" title="gripper_low · fy = +0.036"></i><i style="--a:0.78" title="gripper_low · fz = +0.251"></i><i style="--a:0.20" title="gripper_low · tx = +0.052"></i><i style="--a:0.43" title="gripper_low · ty = +0.131"></i><i style="--a:1.00" title="gripper_low · tz = +0.327"></i><b class="rl"><span>ปกติ</span><code>normal</code><em>0.45</em></b><i style="--a:0.05" title="normal · q0 = -0.003"></i><i style="--a:0.05" title="normal · q1 = -0.005"></i><i style="--a:0.17" title="normal · q2 = +0.022"></i><i style="--a:0.10" title="normal · q3 = +0.009"></i><i style="--a:0.28" title="normal · q4 = +0.044"></i><i style="--a:0.05" title="normal · q5 = -0.011"></i><i style="--a:0.12" title="normal · i0 = +0.014"></i><i style="--a:0.09" title="normal · i1 = +0.007"></i><i style="--a:0.34" title="normal · i2 = +0.055"></i><i style="--a:0.42" title="normal · i3 = +0.069"></i><i style="--a:0.05" title="normal · i4 = +0.000"></i><i style="--a:0.05" title="normal · i5 = -0.013"></i><i style="--a:0.10" title="normal · tcp_x = +0.009"></i><i style="--a:0.16" title="normal · tcp_y = +0.021"></i><i style="--a:0.09" title="normal · tcp_z = +0.007"></i><i style="--a:1.00" title="normal · tcp_speed = +0.178"></i><i style="--a:0.78" title="normal · tcp_force = +0.136"></i><i style="--a:0.13" title="normal · fx = +0.016"></i><i style="--a:0.13" title="normal · fy = +0.014"></i><i style="--a:0.81" title="normal · fz = +0.142"></i><i style="--a:0.05" title="normal · tx = -0.009"></i><i style="--a:0.05" title="normal · ty = -0.018"></i><i style="--a:0.05" title="normal · tz = -0.028"></i><b class="rl dim"><span>หนักแล้วหล่น</span><code>payload_heavy_drop</code><em>0.12</em></b><i style="--a:0.05" title="payload_heavy_drop · q0 = -0.009"></i><i style="--a:1.00" title="payload_heavy_drop · q1 = +0.033"></i><i style="--a:0.44" title="payload_heavy_drop · q2 = +0.014"></i><i style="--a:0.05" title="payload_heavy_drop · q3 = -0.013"></i><i style="--a:0.11" title="payload_heavy_drop · q4 = +0.002"></i><i style="--a:0.05" title="payload_heavy_drop · q5 = -0.004"></i><i style="--a:0.57" title="payload_heavy_drop · i0 = +0.018"></i><i style="--a:0.05" title="payload_heavy_drop · i1 = -0.005"></i><i style="--a:0.05" title="payload_heavy_drop · i2 = -0.029"></i><i style="--a:0.05" title="payload_heavy_drop · i3 = -0.010"></i><i style="--a:0.05" title="payload_heavy_drop · i4 = -0.019"></i><i style="--a:0.12" title="payload_heavy_drop · i5 = +0.002"></i><i style="--a:0.06" title="payload_heavy_drop · tcp_x = +0.000"></i><i style="--a:0.14" title="payload_heavy_drop · tcp_y = +0.003"></i><i style="--a:0.05" title="payload_heavy_drop · tcp_z = -0.027"></i><i style="--a:0.05" title="payload_heavy_drop · tcp_speed = -0.050"></i><i style="--a:0.85" title="payload_heavy_drop · tcp_force = +0.028"></i><i style="--a:0.56" title="payload_heavy_drop · fx = +0.018"></i><i style="--a:0.85" title="payload_heavy_drop · fy = +0.028"></i><i style="--a:0.64" title="payload_heavy_drop · fz = +0.021"></i><i style="--a:0.71" title="payload_heavy_drop · tx = +0.023"></i><i style="--a:0.93" title="payload_heavy_drop · ty = +0.031"></i><i style="--a:0.05" title="payload_heavy_drop · tz = -0.012"></i></div></div>
+
+<div class="find"><p><b>แรงคือกระดูกสันหลังของโมเดลนี้</b> — กินสัดส่วน 31% ถึง 67%
+ของการตัดสินในทุกคลาส ซึ่งอธิบายได้ทันทีว่าทำไมโมเดลนี้ใช้กับ URSim ไม่ได้
+เพราะ URSim คืนค่า <code>actual_TCP_force</code> เป็นศูนย์ตลอด</p></div>
+
+<h2>สัดส่วนตามกลุ่มสัญญาณ</h2>
+<p class="sub">รวม 23 ช่องเป็น 5 กลุ่ม คอลัมน์ขวาคือสัดส่วนของกลุ่ม “แรง”
+และช่องเดี่ยวที่เด่นที่สุดสามอันดับแรก</p>
+<div class="legend"><span class="lg"><i class="s0"></i>ตำแหน่งข้อ <em>q0–q5</em></span><span class="lg"><i class="s1"></i>กระแสข้อ <em>i0–i5</em></span><span class="lg"><i class="s2"></i>ตำแหน่ง TCP <em>x y z</em></span><span class="lg"><i class="s3"></i>ความเร็ว TCP <em>scalar</em></span><span class="lg"><i class="s4"></i>แรง <em>scalar + 6 แกน</em></span></div>
+<table><tbody><tr><th>เดินเร็วผิดปกติ<code>speed_100</code></th><td class="barcell"><div class="bar"><span class="sg s0" style="width:7.2%" title="ตำแหน่งข้อ 7%"></span><span class="sg s1" style="width:21.5%" title="กระแสข้อ 21%"></span><span class="sg s2" style="width:4.6%" title="ตำแหน่ง TCP 5%"></span><span class="sg s3" style="width:29.4%" title="ความเร็ว TCP 29%"></span><span class="sg s4" style="width:37.3%" title="แรง 37%"></span></div></td><td class="num">37%</td><td class="ch">tcp_speed · ty · tcp_force</td></tr><tr><th>เดินช้าผิดปกติ<code>speed_30</code></th><td class="barcell"><div class="bar"><span class="sg s0" style="width:22.9%" title="ตำแหน่งข้อ 23%"></span><span class="sg s1" style="width:22.9%" title="กระแสข้อ 23%"></span><span class="sg s2" style="width:10.6%" title="ตำแหน่ง TCP 11%"></span><span class="sg s3" style="width:3.5%" title="ความเร็ว TCP 3%"></span><span class="sg s4" style="width:40.2%" title="แรง 40%"></span></div></td><td class="num">40%</td><td class="ch">tcp_force · fz · tz</td></tr><tr><th>แรงเสียดทาน<code>friction</code></th><td class="barcell"><div class="bar"><span class="sg s0" style="width:8.6%" title="ตำแหน่งข้อ 9%"></span><span class="sg s1" style="width:24.9%" title="กระแสข้อ 25%"></span><span class="sg s2" style="width:4.2%" title="ตำแหน่ง TCP 4%"></span><span class="sg s3" style="width:13.8%" title="ความเร็ว TCP 14%"></span><span class="sg s4" style="width:48.4%" title="แรง 48%"></span></div></td><td class="num">48%</td><td class="ch">tcp_speed · tz · fx</td></tr><tr><th>บรรทุกหนัก<code>payload_heavy</code></th><td class="barcell"><div class="bar"><span class="sg s0" style="width:9.9%" title="ตำแหน่งข้อ 10%"></span><span class="sg s1" style="width:29.0%" title="กระแสข้อ 29%"></span><span class="sg s2" style="width:3.2%" title="ตำแหน่ง TCP 3%"></span><span class="sg s3" style="width:8.4%" title="ความเร็ว TCP 8%"></span><span class="sg s4" style="width:49.5%" title="แรง 50%"></span></div></td><td class="num">50%</td><td class="ch">fz · i2 · tcp_force</td></tr><tr><th>ของหลุดมือ<code>payload_forced_drop</code></th><td class="barcell"><div class="bar"><span class="sg s0" style="width:11.1%" title="ตำแหน่งข้อ 11%"></span><span class="sg s1" style="width:28.6%" title="กระแสข้อ 29%"></span><span class="sg s2" style="width:6.6%" title="ตำแหน่ง TCP 7%"></span><span class="sg s3" style="width:22.6%" title="ความเร็ว TCP 23%"></span><span class="sg s4" style="width:31.1%" title="แรง 31%"></span></div></td><td class="num">31%</td><td class="ch">tcp_speed · tz · i3</td></tr><tr><th>แรงจับต่ำ<code>gripper_low</code></th><td class="barcell"><div class="bar"><span class="sg s0" style="width:9.0%" title="ตำแหน่งข้อ 9%"></span><span class="sg s1" style="width:27.3%" title="กระแสข้อ 27%"></span><span class="sg s2" style="width:4.9%" title="ตำแหน่ง TCP 5%"></span><span class="sg s3" style="width:11.9%" title="ความเร็ว TCP 12%"></span><span class="sg s4" style="width:46.9%" title="แรง 47%"></span></div></td><td class="num">47%</td><td class="ch">tz · tcp_speed · fz</td></tr><tr><th>ปกติ<code>normal</code></th><td class="barcell"><div class="bar"><span class="sg s0" style="width:10.0%" title="ตำแหน่งข้อ 10%"></span><span class="sg s1" style="width:19.6%" title="กระแสข้อ 20%"></span><span class="sg s2" style="width:5.1%" title="ตำแหน่ง TCP 5%"></span><span class="sg s3" style="width:23.9%" title="ความเร็ว TCP 24%"></span><span class="sg s4" style="width:41.4%" title="แรง 41%"></span></div></td><td class="num">41%</td><td class="ch">tcp_speed · fz · tcp_force</td></tr><tr><th>หนักแล้วหล่น<code>payload_heavy_drop</code></th><td class="barcell"><div class="bar"><span class="sg s0" style="width:22.1%" title="ตำแหน่งข้อ 22%"></span><span class="sg s1" style="width:9.4%" title="กระแสข้อ 9%"></span><span class="sg s2" style="width:1.6%" title="ตำแหน่ง TCP 2%"></span><span class="sg s3" style="width:0.0%" title="ความเร็ว TCP 0%"></span><span class="sg s4" style="width:66.9%" title="แรง 67%"></span></div></td><td class="num">67%</td><td class="ch">q1 · ty · tcp_force</td></tr></tbody></table>
+
+<h2>จุดบอดสองจุด</h2>
+<p class="sub">สองคลาสนี้วัดความแม่นได้ต่ำผิดปกติตอนทดสอบกับข้อมูลจริง
+ฮีทแมพอธิบายว่าเพราะอะไร</p>
+<div class="cards">
+  <div class="card bad">
+    <span class="tag">1 / 24 ถูก</span>
+    <h3>หนักแล้วหล่น</h3>
+    <p>ความมั่นใจเฉลี่ยแค่ <code>0.12</code> ซึ่งเท่ากับการเดาสุ่มใน 8 คลาสพอดี
+    และพึ่งกลุ่มแรงถึง 67% แบบกระจุกตัวแต่อ่อนมาก
+    โมเดลไม่ได้เรียนรู้คลาสนี้ตั้งแต่แรก ไม่ใช่แค่ทายพลาด
+    ทายเป็น <code>payload_heavy</code> 12 ครั้ง <code>normal</code> 11 ครั้ง</p>
+  </div>
+  <div class="card bad">
+    <span class="tag">1 / 30 ถูก</span>
+    <h3>แรงเสียดทานแบบ push</h3>
+    <p>ป้าย <code>friction</code> รวมสามแบบไว้ด้วยกัน — <code>band</code>
+    <code>weight</code> และ <code>push</code> อย่างละ 10 รอบ
+    โมเดลจับสองแบบแรกได้ แต่แบบ push ให้ลายเซ็นต่างจนถูกมองเป็นปกติ</p>
+  </div>
+</div>
+
+<p class="note"><b>วิธีวัด</b> — ฟีเจอร์ 161 ตัวเรียงเป็น 7 สถิติ
+(mean, std, max, min, rms, skew, kurtosis) คูณ 23 ช่อง การปิดบังช่องหนึ่งคือ
+ตั้งฟีเจอร์ทั้ง 7 ตัวของช่องนั้นเป็นศูนย์ ซึ่งเทียบเท่ากับให้ช่องนั้นนิ่งที่ค่าเฉลี่ยของ scaler พอดี
+ค่าที่รายงานคือความน่าจะเป็นของคลาสที่ถูกต้องที่หายไป เฉลี่ยจาก 9 หน้าต่างต่อคลาส
+(3 รอบการทดลอง × 3 ตำแหน่งในรอบ) วัดบนโมเดล <code>rf.onnx</code> รุ่น 8 คลาส
+(108.2 MB) ซึ่งยุบ <code>payload_normal</code> เข้า <code>normal</code> แล้ว
+รุ่นก่อนหน้า 9 คลาสให้ความแม่นรวม 80.7% เทียบกับรุ่นนี้ 84.0%
+<b>ตัวเลขเหล่านี้ใช้เทียบกันเองเท่านั้น</b>
+ผลรวมของ occlusion ไม่เท่ากับความน่าจะเป็นทั้งหมด จึงอ่านว่าช่องไหนสำคัญกว่าช่องไหนได้
+แต่อ่านเป็นเปอร์เซ็นต์ของคำตอบตรงตัวไม่ได้</p>
+</div>

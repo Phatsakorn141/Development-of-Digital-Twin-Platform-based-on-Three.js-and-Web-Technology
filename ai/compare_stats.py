@@ -51,7 +51,7 @@ con.send_pause()
 con.disconnect()
 
 X = np.array(rows, dtype=np.float64)
-d = np.load("../Model_RF/scaler.npz")
+d = np.load("../Model_RF_v2/scaler.npz")
 fmean, fstd = d["mean"], d["std"]
 omean = X.mean(0)
 

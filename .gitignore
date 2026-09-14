@@ -1,7 +1,26 @@
 .env
 node_modules/
-__pycache__/    
-Model_RF/rf.onnx
-
-*.dump
+__pycache__/
 pgdata/
+*.dump
+
+# ── ทรัพย์สินของเพื่อน — ไม่เอาขึ้น repo สาธารณะ ──
+# โปรเจกต์ต้นทางของเพื่อน (web_digitaltwin) ก็กันไฟล์พวกนี้ไว้เองเช่นกัน
+# ต้องขอไฟล์จากเขาโดยตรง ดูวิธีวางใน README
+Model_RF_v2/
+Model_RF/rf.onnx
+Model_RF/rf.onnx.gz
+*.onnx
+*.onnx.gz
+
+# ข้อมูล telemetry ดิบจากหุ่นจริงของเพื่อน
+ai/run_payload_heavy.csv
+ai/run_payload_heavy.json
+
+# ไฟล์ log จากการรันทดสอบ — สร้างใหม่ได้ด้วย predict_mqtt.py --log
+ai/session.csv
+ai/summary.json
+ai/v2_test.csv
+
+# ขยะจากการส่งไฟล์
+*.zip

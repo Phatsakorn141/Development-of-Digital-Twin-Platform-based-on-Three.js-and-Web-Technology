@@ -9,7 +9,7 @@ import rtde.rtde_config as rtde_config
 HOST   = "172.20.10.3"      # แก้ตาม IP ของ VM
 PORT   = 30004
 WINDOW = 125                # ตามที่โมเดลกำหนด (1 วินาที @ 125 Hz)
-MODEL  = "../Model_RF"
+MODEL  = "../Model_RF_v2"   # 8 คลาส — ตัวเก่า 9 คลาสอยู่ที่ ../Model_RF
 
 CLASSES   = json.load(open(f"{MODEL}/classes.json"))
 SC        = np.load(f"{MODEL}/scaler.npz")

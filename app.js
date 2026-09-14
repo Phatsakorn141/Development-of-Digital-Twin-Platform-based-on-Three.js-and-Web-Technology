@@ -2322,6 +2322,255 @@ function flattenPaths(obj, prefix = '', out = []) {
     return out;
 }
 
+// ── MODEL_RELIANCE — โมเดลพึ่งช่องสัญญาณไหนตัดสินแต่ละคลาส ──
+//
+// วัดด้วยวิธี occlusion: ปิดบังทีละช่องจาก 23 ช่อง แล้วดูว่าความมั่นใจตกเท่าไหร่
+// ทำบนข้อมูลหุ่นจริง 72 หน้าต่าง (8 คลาส × 3 รอบ × 3 ตำแหน่ง)
+// ฝังค่าไว้ตายตัวเพราะคำนวณสดไม่ไหว — ต้องยิงโมเดล 23 ครั้งต่อการทำนาย 1 ครั้ง
+//
+// ⚠ ต้องตรงกับ Model_RF_v2 (8 คลาส) ที่ predict_mqtt.py ใช้อยู่
+//   ตัวเก่า 9 คลาสมี payload_normal ซึ่งถูกยุบเข้า normal ไปแล้ว
+//
+// top   = 4 ช่องที่พึ่งมากสุด
+// force = สัดส่วนที่พึ่งกลุ่มแรง (tcp_force + fx fy fz tx ty tz) หน่วยเปอร์เซ็นต์
+const MODEL_RELIANCE = {
+    friction:            { top: ['tcp_speed', 'tz', 'fx', 'ty'],          force: 48 },
+    normal:              { top: ['tcp_speed', 'fz', 'tcp_force', 'i3'],   force: 41 },
+    payload_heavy:       { top: ['fz', 'i2', 'tcp_force', 'tz'],          force: 50 },
+    payload_forced_drop: { top: ['tcp_speed', 'tz', 'i3', 'tcp_force'],   force: 31 },
+    payload_heavy_drop:  { top: ['q1', 'ty', 'tcp_force', 'fy'],          force: 67 },
+    gripper_low:         { top: ['tz', 'tcp_speed', 'fz', 'i4'],          force: 47 },
+    speed_30:            { top: ['tcp_force', 'fz', 'tz', 'q4'],          force: 40 },
+    speed_100:           { top: ['tcp_speed', 'ty', 'tcp_force', 'fz'],   force: 37 },
+};
+
+// ── renderDiagnosis — สรุปว่าอะไรผิดปกติ และผิดเพราะอะไร ──
+//
+// รวมหลักฐาน 3 ทาง: คำทำนายของโมเดล + ค่าเซนเซอร์ + ลายเซ็นการเบี่ยงรายข้อ
+// กฎทั้งหมดมาจากตารางที่วัดจากข้อมูลจริง (เทียบกับค่าฐานของ run ปกติ):
+//   ขึ้น/ลงพร้อมกันทุกข้อ  → ปัญหาความเร็ว ไม่ใช่ข้อใดข้อหนึ่งเสีย
+//   J5 เบี่ยงเดี่ยว +43%   → น้ำหนักบรรทุก (ข้อมือรับโมเมนต์ของที่ถือโดยตรง)
+//   J1 เบี่ยงเดี่ยว +15%   → แรงเสียดทานที่ฐาน
+//   gripper_low            → เบี่ยงแค่ 0-7% แยกด้วยวิธีนี้ไม่ได้ ต้องพึ่งโมเดลอย่างเดียว
+function renderDiagnosis(p, temps) {
+    const box = document.getElementById('diag-panel');
+    if (!box) return;
+    box.classList.remove('hidden');
+
+    const head = document.getElementById('diag-head');
+    const body = document.getElementById('diag-body');
+
+    // ตัวกรองยังเก็บข้อมูลไม่พอ 1 รอบการทำงาน — ยังสรุปไม่ได้
+    if (!hpEma.err || hpEma.n < 1500) {
+        head.className = 'diag-head';
+        head.textContent = 'กำลังเก็บข้อมูล…';
+        body.innerHTML = `<div class="diag-line">ต้องการ ~12 วินาที `
+                       + `(${Math.min(100, Math.round(hpEma.n / 15))}%)</div>`;
+        return;
+    }
+
+    const devs = hpEma.err.map((v, i) => (v / HP_BASE_ERR[i] - 1) * 100);
+    const maxDev = Math.max(...devs), minDev = Math.min(...devs);
+    const top = devs.indexOf(maxDev);
+    const sorted = [...devs].sort((a, b) => b - a);
+    const gap = sorted[0] - sorted[1];          // ข้อที่เบี่ยงสุดโดดกว่าอันดับสองเท่าไหร่
+
+    const force = Number(p.tcp_force_scalar);
+    const pred  = state.lastPrediction;
+    const hot   = Math.max(...temps);
+
+    let verdict, level, why = [];
+
+    if (minDev > 25) {
+        verdict = 'เดินเร็วกว่าปกติ'; level = 'warn';
+        why.push(`ทุกข้อเบี่ยงขึ้นพร้อมกัน +${minDev.toFixed(0)}% ถึง +${maxDev.toFixed(0)}%`);
+        why.push('ขึ้นยกแผงแบบนี้คือความเร็วรวม ไม่ใช่ข้อใดข้อหนึ่งเสีย');
+    } else if (maxDev < -15) {
+        verdict = 'เดินช้ากว่าปกติ'; level = 'warn';
+        why.push(`ทุกข้อเบี่ยงลงพร้อมกัน ${maxDev.toFixed(0)}% ถึง ${minDev.toFixed(0)}%`);
+        why.push('ลงยกแผงแบบนี้คือความเร็วรวม ไม่ใช่ความเสียหาย');
+    } else if (top === 4 && maxDev > 20 && gap > 12) {
+        verdict = 'น้ำหนักบรรทุกเกิน'; level = 'bad';
+        why.push(`J5 เบี่ยง +${maxDev.toFixed(0)}% โดดกว่าข้ออื่น ${gap.toFixed(0)}%`);
+        why.push('J5 คือข้อมือที่รับโมเมนต์จากของที่ถือโดยตรง ยิ่งหนักยิ่งเบี่ยง');
+    } else if (top === 0 && maxDev > 12 && gap > 8) {
+        verdict = 'แรงเสียดทานที่ฐาน'; level = 'bad';
+        why.push(`J1 เบี่ยง +${maxDev.toFixed(0)}% โดดกว่าข้ออื่น ${gap.toFixed(0)}%`);
+        why.push('J1 คือข้อหมุนฐาน เบี่ยงเดี่ยวแปลว่าฝืดที่ฐาน');
+    } else if (Number.isFinite(force) && force >= HP_BANDS.force.bad) {
+        verdict = 'แรงสูงผิดปกติ'; level = 'bad';
+        why.push('แต่รูปแบบการเบี่ยงรายข้อไม่ชัดพอจะระบุตำแหน่ง');
+    } else {
+        verdict = 'ทำงานปกติ'; level = 'ok';
+        why.push(`ทุกข้อเบี่ยงอยู่ในช่วง ${minDev.toFixed(0)}% ถึง +${maxDev.toFixed(0)}%`);
+    }
+
+    if (Number.isFinite(force)) {
+        const ratio = force / HP_BANDS.force.bad;
+        if (force >= HP_BANDS.force.bad) {
+            why.push(`แรงที่ปลายแขน ${force.toFixed(2)} N = ${ratio.toFixed(1)} เท่าของเกณฑ์ `
+                   + `(ปกติ ≤ ${HP_BANDS.force.bad})`);
+        }
+    }
+
+    if (hot >= HP_BANDS.temp.warn) {
+        why.push(`อุณหภูมิ ${hot.toFixed(1)}°C เกินเพดานที่เคยวัดได้ (45.8°C)`);
+    } else {
+        why.push(`อุณหภูมิ ${hot.toFixed(1)}°C อยู่ในช่วงสมดุลปกติ ไม่มีสัญญาณเสื่อม`);
+    }
+
+    // โมเดลกับหลักฐานขัดกันหรือไม่ — จุดนี้สำคัญ บอกว่าเมื่อไหร่ไม่ควรเชื่อโมเดล
+    if (pred && pred.prediction) {
+        const agree = (verdict === 'น้ำหนักบรรทุกเกิน'   && pred.prediction.startsWith('payload'))
+                   || (verdict === 'แรงเสียดทานที่ฐาน'   && pred.prediction.startsWith('friction'))
+                   || (verdict === 'เดินเร็วกว่าปกติ'     && pred.prediction === 'speed_100')
+                   || (verdict === 'เดินช้ากว่าปกติ'      && pred.prediction === 'speed_30')
+                   || (verdict === 'ทำงานปกติ'           && pred.prediction === 'normal');
+        const conf = Number(pred.confidence);
+        why.push(agree
+            ? `โมเดลเห็นตรงกัน: ${pred.prediction} (${conf.toFixed(2)})`
+            : `⚠ โมเดลบอก ${pred.prediction} (${conf.toFixed(2)}) ไม่ตรงกับหลักฐาน — ควรตรวจซ้ำ`);
+        if (Number.isFinite(conf) && conf < 0.5) {
+            why.push('โมเดลมั่นใจต่ำกว่า 0.5 เชื่อตัวเลขเซนเซอร์มากกว่า');
+        }
+
+        // ── โมเดลดูจากช่องไหน + ช่องนั้นยังใช้ได้อยู่หรือเปล่า ──
+        const rel = MODEL_RELIANCE[pred.prediction];
+        if (rel) {
+            why.push(`โมเดลดูจาก: ${rel.top.join(' · ')}  (กลุ่มแรง ${rel.force}%)`);
+            // URSim คืนแรงเป็นศูนย์ตลอด — ถ้าเจอแบบนั้นแปลว่าโมเดลตัดสินโดยขาดฐานหลัก
+            const f = Array.isArray(p.actual_tcp_force) ? p.actual_tcp_force.map(Number) : null;
+            const dead = f && f.every(x => Number.isFinite(x) && Math.abs(x) < 1e-9);
+            if (dead && rel.force >= 30) {
+                why.push(`⚠ ช่องแรงเป็นศูนย์ทั้งหมด — โมเดลขาดฐานตัดสิน ${rel.force}% `
+                       + 'อย่าเชื่อผลนี้ (เกิดกับข้อมูลจาก URSim)');
+            }
+        }
+    }
+
+    head.className = 'diag-head diag-' + level;
+    head.textContent = (level === 'ok' ? '✓ ' : '⚠ ') + verdict;
+
+    const esc = s => String(s).replace(/[<>&]/g,
+        c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+    body.innerHTML = why.map(w => `<div class="diag-line">${esc(w)}</div>`).join('')
+        + '<div class="diag-bars">' + devs.map((d, i) => {
+            const w = Math.min(100, Math.abs(d));
+            const c = d > 20 ? 'db-bad' : d > 10 ? 'db-warn' : 'db-ok';
+            return `<div class="diag-bar"><span>J${i + 1}</span>`
+                 + `<i class="${c}" style="width:${w}%"></i>`
+                 + `<em>${d > 0 ? '+' : ''}${d.toFixed(0)}%</em></div>`;
+        }).join('') + '</div>';
+}
+
+// ── renderHealthPanel — สถานะกายภาพสด อ่านจาก payload ตรงๆ ไม่ต้องพึ่ง Python ──
+// เกณฑ์ทุกตัวมาจาก percentile ของ run ที่ติดป้าย normal ในข้อมูลหุ่นจริง 2.45 ล้านแถว
+//   แรง TCP     p50 0.73  p95 1.69  p99 2.19
+//   กระแสหุ่น    p50 0.77  p95 0.89  p99 0.94
+//   คลาดเคลื่อน  p50 184   p95 401   p99 495   µrad
+//   อุณหภูมิ     สูงสุดที่เคยวัดได้ 45.75 ตลอด 8 วันทำงาน จึงเตือนที่ 46
+const HP_BANDS = {
+    force:   { warn: 1.69, bad: 2.19 },
+    current: { warn: 0.89, bad: 0.94 },
+    err:     { warn: 401,  bad: 495  },
+    temp:    { warn: 46,   bad: 50   },
+};
+let hpLast = 0;
+
+// ── ค่าฐานรายข้อจาก run ที่ติดป้าย normal (ค่าเฉลี่ยทั้ง run) ──
+// คลาดเคลื่อนตำแหน่ง หน่วย µrad — ใช้เทียบว่าข้อไหนเบี่ยงผิดปกติ
+const HP_BASE_ERR = [88, 71, 130, 94, 30, 83];
+// ตัวกรอง EMA: รอบ pick-place ยาว ~11 วิ ต้องเฉลี่ยข้ามรอบไม่งั้นแท่งกระพริบตามจังหวะแขน
+// alpha 0.0007 ที่ 125 Hz ≈ ค่าคงที่เวลา 12 วินาที
+const HP_ALPHA = 0.0007;
+const hpEma = { err: null, n: 0 };
+
+function renderHealthPanel(p) {
+    if (!p || typeof p !== 'object' || !Array.isArray(p.joint_temperatures)) return;
+
+    // ── อัปเดตตัวกรองทุกข้อความ (125 Hz) แม้จะยังไม่ถึงรอบวาดจอ ──
+    if (Array.isArray(p.actual_q) && Array.isArray(p.target_q)) {
+        const e = p.actual_q.map((v, i) => Math.abs(Number(v) - Number(p.target_q[i])) * 1e6);
+        if (e.every(Number.isFinite)) {
+            hpEma.err = hpEma.err === null
+                ? e
+                : hpEma.err.map((prev, i) => prev + HP_ALPHA * (e[i] - prev));
+            hpEma.n++;
+        }
+    }
+
+    // ข้อมูลเข้ามา 125 ครั้ง/วินาที — วาด DOM ทุกครั้งเบราว์เซอร์ไม่ไหว เอาแค่ 5 ครั้ง/วินาที
+    const now = performance.now();
+    if (now - hpLast < 200) return;
+    hpLast = now;
+
+    const box = document.getElementById('health-panel');
+    if (!box) return;
+    box.classList.remove('hidden');
+
+    // คลาดเคลื่อนตำแหน่ง = ข้อที่หลุดจากเป้าหมายมากสุด แปลงเป็น µrad
+    let err = null;
+    if (Array.isArray(p.actual_q) && Array.isArray(p.target_q)) {
+        err = Math.max(...p.actual_q.map((v, i) =>
+                  Math.abs(Number(v) - Number(p.target_q[i])))) * 1e6;
+    }
+
+    const temps = p.joint_temperatures.map(Number);
+    const row = (name, raw, unit, band, digits) => {
+        const v = Number(raw);
+        if (!Number.isFinite(v)) return '';
+        const cls = v >= band.bad ? 'hp-bad' : v >= band.warn ? 'hp-warn' : 'hp-ok';
+        return `<div class="hp-row ${cls}"><b>${name}</b>`
+             + `<u>${v.toFixed(digits)}</u><s>${unit}</s></div>`;
+    };
+
+    document.getElementById('hp-rows').innerHTML =
+          row('แรงที่ปลายแขน', p.tcp_force_scalar,     'N',    HP_BANDS.force,   2)
+        + row('กระแสรวม',      p.actual_robot_current, 'A',    HP_BANDS.current, 3)
+        + row('คลาดเคลื่อน',   err,                    'µrad', HP_BANDS.err,     0)
+        + row('ข้อที่ร้อนสุด',  Math.max(...temps),     '°C',   HP_BANDS.temp,    1);
+
+    document.getElementById('hp-temps').innerHTML = temps.map((t, i) =>
+        Number.isFinite(t) ? `<div>J${i + 1}<em>${t.toFixed(1)}</em></div>` : '').join('');
+
+    renderDiagnosis(p, temps);
+}
+
+// ── renderAIPanel — แสดงผลทำนายสดจากโมเดล ──
+// payload: { prediction, confidence, true_label, probs:{...} }
+// true_label มีเฉพาะตอน replay ข้อมูลเพื่อน — ต่อหุ่นจริงจะไม่มี ช่องเฉลยจะว่างไว้
+function renderAIPanel(p) {
+    const box = document.getElementById('ai-panel');
+    if (!box || !p || typeof p !== 'object') return;
+    box.classList.remove('hidden');
+
+    state.lastPrediction = p;   // เก็บไว้ให้ renderDiagnosis เอาไปรวมกับหลักฐานจากเซนเซอร์
+
+    const esc = s => String(s).replace(/[<>&"]/g,
+        c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+
+    document.getElementById('ai-pred').textContent = p.prediction ?? '—';
+    document.getElementById('ai-conf').textContent =
+        Number.isFinite(p.confidence) ? p.confidence.toFixed(2) : '';
+
+    const truth = document.getElementById('ai-truth');
+    if (p.true_label) {
+        const ok = p.prediction === p.true_label;
+        truth.textContent = `เฉลย: ${p.true_label}  ${ok ? '✓' : '✗'}`;
+        truth.className = 'ai-truth ' + (ok ? 'ok' : 'bad');
+    } else {
+        truth.textContent = '';
+        truth.className = 'ai-truth';
+    }
+
+    const top = Object.entries(p.probs || {})
+                      .sort((a, b) => b[1] - a[1]).slice(0, 4);
+    document.getElementById('ai-bars').innerHTML = top.map(([k, v]) =>
+        `<div class="ai-bar"><span>${esc(k)}</span>`
+      + `<i style="width:${(v * 100).toFixed(0)}%"></i>`
+      + `<em>${v.toFixed(2)}</em></div>`).join('');
+}
+
 // ── renderPayloadInspector — แสดง payload สด ให้คลิกเลือก field ──
 function renderPayloadInspector() {
     const box = dom.payloadInspector;
@@ -2406,7 +2655,11 @@ function connectMQTT() {
                 // subscribe ตาม srcTopic ของแต่ละ joint — ไม่มี topic ตายตัวในโค้ดอีกต่อไป
                // topic ที่ joint ผูกไว้ + "#" ถ้าเปิด Discover (ฟังทุก topic เพื่อสำรวจ)
         const bound  = jointTopics();
-        const topics = dom.mqttDiscover?.checked ? [...new Set([...bound, '#'])] : bound;
+
+        // ur/prediction ไม่ได้ผูกกับ joint ไหน ต้อง subscribe เพิ่มเองเสมอ
+        const topics = dom.mqttDiscover?.checked
+            ? [...new Set([...bound, '#'])]
+            : [...new Set([...bound, 'ur/prediction'])];
 
         if (bound.length === 0) {
             console.warn('MQTT: ยังไม่มี joint ตัวไหนตั้ง MQTT Topic — 3D ยังไม่ขยับ แต่ Discover จะเก็บ payload ไว้ให้เลือกใน Add/Edit Joint');
@@ -2438,6 +2691,9 @@ function connectMQTT() {
         try { payload = JSON.parse(text); }
         catch (e) { payload = parseFloat(text); }
 
+                // ── ผลทำนายจากโมเดล AI — ไม่ใช่ค่า joint จึงจัดการแยกแล้วจบเลย ──
+        if (topic === 'ur/prediction') { renderAIPanel(payload); return; }
+
         // เก็บ payload ล่าสุดต่อ topic ไว้ให้ Payload Inspector
         const rec = state.lastPayloads[topic] || { count: 0 };
         rec.payload = payload;
@@ -2446,6 +2702,7 @@ function connectMQTT() {
         state.lastPayloads[topic] = rec;
 
         recordNetStats(payload);
+        renderHealthPanel(payload);
 
         let matched = 0;
         for (const joint of state.joints) {

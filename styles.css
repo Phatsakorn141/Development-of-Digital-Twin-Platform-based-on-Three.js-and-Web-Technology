@@ -1258,3 +1258,93 @@ html, body {
 .srv-row:hover { background: var(--bg-hover); }
 .srv-name { color: var(--text-primary); font-weight: 500; }
 .srv-meta { color: var(--text-muted); font-size: 11px; text-align: right; }
+
+
+/* ===== AI Prediction — ผลทำนายสดจาก predict_mqtt.py ===== */
+#ai-panel {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 236px;
+    padding: 10px 12px;
+    background: rgba(15, 17, 23, 0.82);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+#ai-panel.hidden { display: none; }
+.ai-label  { font-size: 9px; letter-spacing: .14em; color: var(--text-muted); }
+.ai-main   { display: flex; align-items: baseline; gap: 8px; margin: 3px 0 6px; }
+#ai-pred   { font-size: 15px; font-weight: 600; }
+#ai-conf   { font-size: 12px; color: var(--text-muted); }
+.ai-truth  { font-size: 11px; min-height: 14px; margin-bottom: 7px; }
+.ai-truth.ok  { color: #3fb950; }
+.ai-truth.bad { color: #f85149; }
+.ai-bars   { display: grid; gap: 4px; }
+.ai-bar    { display: grid; grid-template-columns: 108px 1fr 26px;
+             gap: 6px; align-items: center; font-size: 10px; color: var(--text-muted); }
+.ai-bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-bar i  { height: 4px; border-radius: 2px; background: #4a9eff; min-width: 1px; }
+.ai-bar em { font-style: normal; text-align: right; }
+
+/* ===== Sensor Status — สถานะกายภาพสด ===== */
+#health-panel {
+    position: absolute;
+    top: 156px;                /* ใต้กล่อง AI — ขยับได้ตามใจ */
+    right: 12px;
+    width: 236px;
+    padding: 10px 12px;
+    background: rgba(15, 17, 23, 0.82);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+#health-panel.hidden { display: none; }
+.hp-label  { font-size: 9px; letter-spacing: .14em; color: var(--text-muted); margin-bottom: 6px; }
+.hp-row    { display: grid; grid-template-columns: 1fr auto auto;
+             gap: 6px; align-items: baseline; padding: 2px 0; }
+.hp-row b  { font-weight: 400; color: var(--text-muted); }
+.hp-row u  { text-decoration: none; font-weight: 600; }
+.hp-row s  { text-decoration: none; font-size: 9px; color: var(--text-muted); }
+.hp-ok   u { color: #3fb950; }
+.hp-warn u { color: #d29922; }
+.hp-bad  u { color: #f85149; }
+.hp-temps  { display: flex; gap: 3px; margin-top: 8px; }
+.hp-temps div    { flex: 1; text-align: center; font-size: 9px; color: var(--text-muted);
+                   background: rgba(255, 255, 255, .05); border-radius: 3px; padding: 3px 0; }
+.hp-temps div em { display: block; font-style: normal; font-size: 10px; color: #e6edf3; }
+
+/* ===== Diagnosis — สรุปว่าอะไรผิดปกติและเพราะอะไร ===== */
+#diag-panel {
+    position: absolute;
+    bottom: 44px;              /* เหนือแถบ net-stats */
+    right: 12px;
+    width: 300px;
+    padding: 10px 12px;
+    background: rgba(15, 17, 23, 0.86);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+#diag-panel.hidden { display: none; }
+.diag-head  { font-size: 14px; font-weight: 600; margin: 2px 0 6px; }
+.diag-ok   { color: #3fb950; }
+.diag-warn { color: #d29922; }
+.diag-bad  { color: #f85149; }
+.diag-line  { color: var(--text-muted); line-height: 1.5; padding-left: 10px;
+              text-indent: -10px; }
+.diag-line::before { content: '· '; }
+.diag-bars  { display: grid; gap: 3px; margin-top: 8px; }
+.diag-bar   { display: grid; grid-template-columns: 20px 1fr 34px;
+              gap: 6px; align-items: center; font-size: 10px; color: var(--text-muted); }
+.diag-bar i { height: 4px; border-radius: 2px; min-width: 1px; }
+.diag-bar em{ font-style: normal; text-align: right; }
+.db-ok   { background: #3fb950; }
+.db-warn { background: #d29922; }
+.db-bad  { background: #f85149; }

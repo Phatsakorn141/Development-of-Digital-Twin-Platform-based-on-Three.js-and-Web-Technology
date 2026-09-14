@@ -117,6 +117,28 @@
             </div>
             <!-- สถิติคุณภาพการรับข้อมูล — latency / rate / jitter / ข้อความหาย -->
             <div id="net-stats"><span>ไม่ได้เชื่อมต่อ</span></div>
+                        <!-- ผลทำนายสดจากโมเดล AI — มาทาง topic ur/prediction ที่ predict_mqtt.py ส่ง -->
+            <div id="ai-panel" class="hidden">
+                <div class="ai-label">AI PREDICTION</div>
+                <div class="ai-main">
+                    <span id="ai-pred">—</span>
+                    <span id="ai-conf"></span>
+                </div>
+                <div id="ai-truth" class="ai-truth"></div>
+                <div id="ai-bars" class="ai-bars"></div>
+            </div>
+            <!-- สถานะกายภาพสด — คำนวณในเบราว์เซอร์จาก ur/telemetry ตรงๆ -->
+            <div id="health-panel" class="hidden">
+                <div class="hp-label">SENSOR STATUS</div>
+                <div id="hp-rows"></div>
+                <div id="hp-temps" class="hp-temps"></div>
+            </div>
+            <!-- สรุปวินิจฉัย — รวมคำทำนาย AI + ค่าเซนเซอร์ + ลายเซ็นรายข้อ -->
+            <div id="diag-panel" class="hidden">
+                <div class="hp-label">DIAGNOSIS</div>
+                <div id="diag-head" class="diag-head">—</div>
+                <div id="diag-body"></div>
+            </div>
         </section>
 
         <!-- Right Panel: Control (Joints / Presets / Animation) -->
