@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "exportedAt": "2026-09-14T18:54:35.851Z",
+  "exportedAt": "2026-09-19T14:24:35.495Z",
   "jointIdCounter": 12,
   "presetIdCounter": 0,
   "keyframeIdCounter": 0,
@@ -9,7 +9,7 @@
       "id": "joint_6",
       "name": "1 Shoulder Pan",
       "nodeUUIDs": [
-        "e742095b-b447-4d58-b5e3-74896d2a4b47"
+        "8f2a26a1-45b9-40e2-88b2-86094e289682"
       ],
       "nodeNames": [
         "ShoulderBone"
@@ -20,7 +20,7 @@
       "min": -6.29,
       "max": 6.29,
       "step": 0.01,
-      "value": 1.36,
+      "value": 4.349335770606995,
       "simPattern": "none",
       "simPeriod": 3,
       "jointType": "revolute",
@@ -29,11 +29,11 @@
       "srcTopic": "ur/telemetry",
       "srcPath": "actual_q[0]",
       "scale": 1,
-      "offset": 0,
-      "invert": true,
+      "offset": 3.105,
+      "invert": false,
       "unit": "rad",
       "baseValues": {
-        "e742095b-b447-4d58-b5e3-74896d2a4b47": 0
+        "8f2a26a1-45b9-40e2-88b2-86094e289682": 0
       },
       "baseValuesByName": {
         "ShoulderBone": 0
@@ -43,7 +43,7 @@
       "id": "joint_7",
       "name": "2 Shoulder Lift",
       "nodeUUIDs": [
-        "ba296058-a16e-46ca-ba89-4e50a8745bd5"
+        "f8378235-d8ac-4b1b-ab3e-b3e1232a5551"
       ],
       "nodeNames": [
         "UpperArmBone1"
@@ -54,7 +54,7 @@
       "min": -6.29,
       "max": 6.29,
       "step": 0.01,
-      "value": 0.059942212335103884,
+      "value": -0.27072069217216277,
       "simPattern": "none",
       "simPeriod": 3,
       "jointType": "revolute",
@@ -63,11 +63,11 @@
       "srcTopic": "ur/telemetry",
       "srcPath": "actual_q[1]",
       "scale": 1,
-      "offset": -1.5708,
-      "invert": true,
+      "offset": 1.297,
+      "invert": false,
       "unit": "rad",
       "baseValues": {
-        "ba296058-a16e-46ca-ba89-4e50a8745bd5": 0
+        "f8378235-d8ac-4b1b-ab3e-b3e1232a5551": 0
       },
       "baseValuesByName": {
         "UpperArmBone1": 0
@@ -77,7 +77,7 @@
       "id": "joint_8",
       "name": "3 Elbow",
       "nodeUUIDs": [
-        "c5480d22-d91f-48b0-85f3-202bd89f7567"
+        "04b105a6-3fdb-4745-af7d-c3210e5c567c"
       ],
       "nodeNames": [
         "ForeArmBone1"
@@ -88,7 +88,7 @@
       "min": -6.29,
       "max": 6.29,
       "step": 0.01,
-      "value": 0.010799288749694824,
+      "value": 1.8240932836532593,
       "simPattern": "none",
       "simPeriod": 3,
       "jointType": "revolute",
@@ -97,11 +97,11 @@
       "srcTopic": "ur/telemetry",
       "srcPath": "actual_q[2]",
       "scale": 1,
-      "offset": 1.1396211385726929,
-      "invert": false,
+      "offset": 0.264,
+      "invert": true,
       "unit": "rad",
       "baseValues": {
-        "c5480d22-d91f-48b0-85f3-202bd89f7567": -2.9776657442735273e-8
+        "04b105a6-3fdb-4745-af7d-c3210e5c567c": -2.9776657442735273e-8
       },
       "baseValuesByName": {
         "ForeArmBone1": -2.9776657442735273e-8
@@ -111,7 +111,7 @@
       "id": "joint_9",
       "name": "4 Wrist 1",
       "nodeUUIDs": [
-        "fc966b73-3574-4fe1-998c-a0efbd88e8e8"
+        "23d15a4f-2b8d-425a-8e25-a2bc331959b8"
       ],
       "nodeNames": [
         "WristBone"
@@ -122,7 +122,7 @@
       "min": -6.29,
       "max": 6.29,
       "step": 0.01,
-      "value": 0.379604783288473,
+      "value": 0.5256772632203162,
       "simPattern": "none",
       "simPeriod": 3,
       "jointType": "revolute",
@@ -131,11 +131,11 @@
       "srcTopic": "ur/telemetry",
       "srcPath": "actual_q[3]",
       "scale": 1,
-      "offset": -1.5708,
-      "invert": true,
+      "offset": 2.108,
+      "invert": false,
       "unit": "rad",
       "baseValues": {
-        "fc966b73-3574-4fe1-998c-a0efbd88e8e8": -4.768371301090447e-7
+        "23d15a4f-2b8d-425a-8e25-a2bc331959b8": -4.768371301090447e-7
       },
       "baseValuesByName": {
         "WristBone": -4.768371301090447e-7
@@ -145,7 +145,7 @@
       "id": "joint_10",
       "name": "5 Wrist 2",
       "nodeUUIDs": [
-        "9e34676e-b717-4f2c-ac13-47ee05e77ffd"
+        "4156ee83-5665-4069-9b6b-55c28ce790ad"
       ],
       "nodeNames": [
         "ToolInterfaceBone"
@@ -156,7 +156,7 @@
       "min": -6.29,
       "max": 6.29,
       "step": 0.01,
-      "value": -1.5694580078125,
+      "value": 1.5709594020843505,
       "simPattern": "none",
       "simPeriod": 3,
       "jointType": "revolute",
@@ -165,11 +165,11 @@
       "srcTopic": "ur/telemetry",
       "srcPath": "actual_q[4]",
       "scale": 1,
-      "offset": 0,
-      "invert": true,
+      "offset": 0.001,
+      "invert": false,
       "unit": "rad",
       "baseValues": {
-        "9e34676e-b717-4f2c-ac13-47ee05e77ffd": -4.7683706393117557e-7
+        "4156ee83-5665-4069-9b6b-55c28ce790ad": -4.7683706393117557e-7
       },
       "baseValuesByName": {
         "ToolInterfaceBone": -4.7683706393117557e-7
@@ -179,7 +179,7 @@
       "id": "joint_11",
       "name": "6 Wrist 3",
       "nodeUUIDs": [
-        "c8dc9ea5-aa79-462b-a714-196f7e90280d"
+        "a0a10e8a-ffdd-431a-96e8-817f4368d265"
       ],
       "nodeNames": [
         "ToolBone"
@@ -190,20 +190,20 @@
       "min": -6.29,
       "max": 6.29,
       "step": 0.01,
-      "value": 6.29,
+      "value": -8.190467484781536,
       "simPattern": "none",
       "simPeriod": 3,
-      "jointType": "revolute",
+      "jointType": "continuous",
       "coupledTarget": null,
       "coupledRatio": 1,
       "srcTopic": "ur/telemetry",
       "srcPath": "actual_q[5]",
       "scale": 1,
       "offset": 0,
-      "invert": true,
+      "invert": false,
       "unit": "rad",
       "baseValues": {
-        "c8dc9ea5-aa79-462b-a714-196f7e90280d": 0.000004233233581339855
+        "a0a10e8a-ffdd-431a-96e8-817f4368d265": 0.000004233233581339855
       },
       "baseValuesByName": {
         "ToolBone": 0.000004233233581339855
