@@ -52,6 +52,8 @@ export function startLogger(db) {
         try { payload = JSON.parse(buf.toString()); }
         catch { return; }                                   // ไม่ใช่ JSON ก็ไม่เก็บ
         if (typeof payload !== 'object' || payload === null) return;
+        // ข้อมูลโหมดเร่งเวลาเป็นแถวที่ข้ามมา ไม่ใช่การทำงานจริง ไม่เก็บลง DB
+        if (payload.ff > 1) { skipped++; return; }
 
         for (const f of DROP_FIELDS) delete payload[f];
 

@@ -2322,6 +2322,396 @@ function flattenPaths(obj, prefix = '', out = []) {
     return out;
 }
 
+
+
+// ── FORECAST — ทำนายว่าเดินต่อเนื่องไปอีกนานๆ จะเกิดอะไรขึ้น ──
+//
+// วิธี: วัดสภาพปัจจุบันจากการเดินจริง 1 รอบ แล้วอนุมานด้วยสมการความร้อนอันดับหนึ่ง
+//   T(t) = T∞ − (T∞ − T₀) · e^(−t/τ)
+//
+// ค่าคงที่ทุกตัวมาจากข้อมูลหุ่นจริง 2.45 ล้านแถว ไม่มีตัวไหนสมมติ:
+//   tau      ฟิตจาก long_run 44 นาทีต่อเนื่อง 327,866 แถว  RMSE 0.008-0.013°C
+//   t_inf    อุณหภูมิสูงสุดที่วัดได้จริงตลอด 8 วันทำงาน (7-9 ชม./วัน)
+//   speeds   วัดจาก 20 runs ต่อความเร็ว
+//   trackErr ค่าคลาดเคลื่อนฐานรายข้อของ run ปกติ
+//
+// ⚠ ความเร็วไม่มีผลต่อความร้อน — วัดแล้วกระแสเท่ากันทั้ง 3 ความเร็ว (1.736-1.741 A)
+//   เพราะกระแสเกือบทั้งหมดใช้ต้านแรงโน้มถ่วง ไม่ใช่เร่งความเร็ว
+//   ความเร็วมีผลกับ "ปริมาณงานต่อชั่วโมง" และ "การสึกหรอเชิงกล" เท่านั้น
+const FORECAST_CAL = {
+    tauMin: [34.3, 46.9, 41.1, 32.6, 36.6, 32.9],   // นาที
+    // ค่าที่อุณหภูมิไต่ขึ้นจากอุณหภูมิห้องจนเข้าสมดุล — วัดจากวันที่เริ่มจากเครื่องเย็น 2 วัน
+    // (20 พ.ค. ห้อง 23.3°C · 26 พ.ค. ห้อง 24.2°C) สองวันต่างกันแค่ ~1°C
+    // ไม่ขึ้นกับความเร็ว เพราะกระแสเท่ากันทุกความเร็ว
+    riseC:  [10.1, 12.6, 15.7, 18.6, 20.9, 21.2],   // °C เหนืออุณหภูมิห้อง
+    ambientRef: 24.2,                                // ค่าเริ่มต้นถ้าผู้ใช้ไม่ระบุ
+    trackErrUrad: [88, 71, 130, 94, 30, 83],
+    speeds: [
+        // runSec: เฉลี่ยรายความเร็ว ไม่รวม long_run (ตัวนั้นคือ 31 รอบต่อกัน)
+        // rotPerHr: หมุนรวม 6 ข้อต่อรอบ (~59 rad) ÷ runSec × 3600
+        { pct:  30, runSec: 138.7, rotPerHr: 1543.1, iRms: 1.741 },
+        { pct:  50, runSec:  86.9, rotPerHr: 2436.7, iRms: 1.736 },
+        { pct: 100, runSec:  47.5, rotPerHr: 4460.2, iRms: 1.736 },
+    ],
+};
+
+// ── ช่วงค่าที่ยอมรับของแต่ละช่อง ──
+// ช่องเป็น text แล้ว ผู้ใช้พิมพ์อะไรก็ได้ ต้องบีบเองก่อนเอาไปคำนวณ
+const FC_LIMITS = {
+    'fc-speed': { min: 10, max: 100,  def: 50   },
+    'fc-hr':    { min: 0,  max: 999, def: 2 },
+    'fc-min':   { min: 0,  max: 999, def: 0 },
+    'fc-amb':   { min: 5,  max: 45,   def: 24.2 },
+};
+
+// ── fcNum — อ่านช่อง text แล้วบีบให้อยู่ในช่วง ──
+// ถ้าค่าถูกแก้ จะเขียนกลับลงช่องพร้อมขอบสีเหลือง ผู้ใช้จะเห็นว่าโดนปรับ
+function fcNum(id) {
+    const lim = FC_LIMITS[id];
+    const el  = document.getElementById(id);
+    if (!el) return lim.def;
+    const raw = el.value.trim();
+    let v = parseFloat(raw);
+    if (!Number.isFinite(v)) v = lim.def;
+    v = Math.min(lim.max, Math.max(lim.min, v));
+    const changed = String(v) !== raw;
+    if (changed) el.value = v;
+    el.classList.toggle('fixed', changed);
+    return v;
+}
+
+// ── fcDuration — รวมช่อง ชม. กับ นาที เป็นนาทีรวม ──
+// พิมพ์ 90 ในช่องนาทีได้ ระบบทดเป็น 1 ชม. 30 นาที แล้วเขียนกลับให้เห็น
+function fcDuration() {
+    const h = fcNum('fc-hr');
+    const m = fcNum('fc-min');
+    const total = Math.max(1, h * 60 + m);
+
+    const nh = Math.floor(total / 60);
+    const nm = Math.round(total % 60);
+    const carried = (nh !== h || nm !== m);
+    const eh = document.getElementById('fc-hr');
+    const em = document.getElementById('fc-min');
+    if (eh) { eh.value = nh; eh.classList.toggle('fixed', carried); }
+    if (em) { em.value = nm; em.classList.toggle('fixed', carried); }
+    return total;
+}
+
+// ── fmtDur — 150 → "2 ชม. 30 นาที" ──
+function fmtDur(min) {
+    const h = Math.floor(min / 60), m = Math.round(min % 60);
+    if (h && m) return `${h} ชม. ${m} นาที`;
+    if (h)      return `${h} ชั่วโมง`;
+    return `${m} นาที`;
+}
+
+// ── fmtSec — 120 → "2 นาที", 75 → "1 นาที 15 วิ" ──
+function fmtSec(sec) {
+    const total = Math.round(sec);
+    const m = Math.floor(total / 60), s = total % 60;
+    return m && s ? `${m} นาที ${s} วิ` : m ? `${m} นาที` : `${s} วิ`;
+}
+
+// ============================================================
+// โหมดเร่งเวลา — เหมือน fast-forward คลิป YouTube
+// ผู้ใช้บอกแค่เวลาที่อยากรู้ ระบบคูณเอง แล้วดูจบใน FF_WATCH_SEC วินาที
+//   ตัวคูณ = เวลาที่ขอ ÷ เวลาที่ใช้ดู   (2 ชม. ÷ 2 นาที = 60×)
+// ============================================================
+const FF_WATCH_SEC = 120;
+// มีข้อมูลเดินต่อเนื่องจริงแค่ 3 ความเร็วนี้ — ค่าอื่นปัดไปตัวที่ใกล้สุด
+const FF_SPEEDS = [30, 50, 100];
+const ffSpeed = (pct) =>
+    FF_SPEEDS.reduce((a, b) => (Math.abs(b - pct) < Math.abs(a - pct) ? b : a));
+
+// ── renderPlan — บอกก่อนกดปุ่มว่าจะเร่งกี่เท่า ──
+function renderPlan() {
+    const el = document.getElementById('fc-plan');
+    if (!el) return;
+    const want = fcNum('fc-speed'), pct = ffSpeed(want);
+    const T = fcDuration();
+    const sp = interpSpeed(pct);
+    const watch = Math.min(FF_WATCH_SEC, T * 60);
+    el.innerHTML =
+        `${fmtDur(T)} = <b>${(T * 60 / sp.runSec).toFixed(1)} รอบ</b> ที่ ${pct}%<br>`
+      + `ดูจบใน <b>${fmtSec(watch)}</b> · เร่ง <b>${(T * 60 / watch).toFixed(1)}×</b>`
+      + (pct !== want
+         ? `<br><span class="fc-warn">มีข้อมูลจริงแค่ 30 / 50 / 100% ใช้ ${pct}% แทน</span>`
+         : '');
+}
+
+// ── applyTimelapse — เรียกทุกข้อความ telemetry ก่อนวาดแผงสถานะ ──
+// ช่วง ff_real=false อุณหภูมิในข้อมูลวนซ้ำ (รอบที่เอามาเล่นซ้ำอัดตอนเครื่องเย็น)
+// แทนด้วยสมการความร้อนต่อจากค่าจริงล่าสุด — แก้เฉพาะที่เว็บแสดง ข้อมูลต้นทางไม่ถูกแตะ
+function applyTimelapse(p) {
+    const ff = state.ff;
+    if (!ff || !p || p.ff == null || !Array.isArray(p.joint_temperatures)) return;
+
+    if (p.ff_real) {
+        ff.lastReal = p.joint_temperatures.map(Number);
+        ff.lastRealSec = p.ff_sim_sec;
+        if (!ff.startTemps) ff.startTemps = ff.lastReal.slice();
+    } else if (ff.lastReal) {
+        const tMin = (p.ff_sim_sec - ff.lastRealSec) / 60;
+        p.joint_temperatures = ff.lastReal.map((T0, i) => {
+            const tInf = ff.amb + FORECAST_CAL.riseC[i];
+            return tInf - (tInf - T0) * Math.exp(-tMin / FORECAST_CAL.tauMin[i]);
+        });
+    }
+    ff.simSec = p.ff_sim_sec;
+    ff.real = !!p.ff_real;
+    ff.temps = p.joint_temperatures.map(Number);
+    renderFFLive();
+}
+
+// ── renderFFLive — ตัวนับวิ่งระหว่างเร่ง วาด 10 ครั้ง/วิ พอ ──
+function renderFFLive() {
+    const ff = state.ff, now = performance.now();
+    if (ff.done || now - (ff.drawn || 0) < 100) return;
+    ff.drawn = now;
+    const sp = interpSpeed(ff.pct);
+    const h = ff.temps.indexOf(Math.max(...ff.temps));
+    document.getElementById('fc-out').innerHTML =
+        `<div class="fc-head">⏩ ${fmtDur(ff.simSec / 60)} / ${fmtDur(ff.T / 60)} · `
+      + `${ff.mult.toFixed(1)}×</div>`
+      + `<div class="fc-line">รอบ <b>${(ff.simSec / sp.runSec).toFixed(1)}</b> · หมุนสะสม `
+      + `<b>${Math.round(sp.rotPerHr * ff.simSec / 3600).toLocaleString()} rad</b></div>`
+      + `<div class="fc-line">J${h + 1} <b>${ff.temps[h].toFixed(1)}°C</b> `
+      + (ff.real ? '<span class="fc-tag real">ข้อมูลจริง</span>'
+                 : '<span class="fc-tag est">อนุมาน</span>') + `</div>`
+      + (ff.mult > 1 ? '<div class="fc-note">AI หยุดทายระหว่างเร่ง — '
+                     + 'โมเดลต้องใช้ข้อมูลความเร็วปกติครบ 1 วินาที</div>' : '');
+}
+
+// ── renderFFResult — สรุปตอนเร่งจบ ──
+function renderFFResult() {
+    const ff = state.ff;
+    const out = document.getElementById('fc-out');
+    if (!ff.temps) {
+        out.innerHTML = '<div class="fc-note">ไม่ได้รับข้อมูลระหว่างเร่ง</div>';
+        return;
+    }
+    const sp = interpSpeed(ff.pct);
+    const h = ff.temps.indexOf(Math.max(...ff.temps));
+    const end = ff.temps[h], start = ff.startTemps?.[h];
+    const tInf = ff.amb + FORECAST_CAL.riseC[h];
+    // เกณฑ์ Universal Robots: เตือน 50°C · ตัดการทำงาน 85°C
+    const level = end >= 85 ? 'bad' : end >= 50 ? 'warn' : 'ok';
+    const estMin = Math.max(0, ff.T - ff.realSec) / 60;
+    out.innerHTML =
+        `<div class="fc-head ${level}">${level === 'ok' ? '✓' : '⚠'} `
+      + `เดินต่อเนื่อง ${fmtDur(ff.T / 60)} `
+      + `<span class="fc-dim">(ดูใน ${fmtSec(ff.watch)} · ${ff.mult.toFixed(1)}×)</span></div>`
+      + `<div class="fc-line">อุณหภูมิ J${h + 1} <b>`
+      + (start != null ? `${start.toFixed(1)}°C → ` : '') + `${end.toFixed(1)}°C</b> `
+      + `(เพดาน ${tInf.toFixed(1)}°C · เตือน 50 · ตัด 85)</div>`
+      + `<div class="fc-line">ปริมาณงาน <b>${(ff.T / sp.runSec).toFixed(1)} รอบ</b> · หมุนสะสม `
+      + `<b>${Math.round(sp.rotPerHr * ff.T / 3600).toLocaleString()} rad</b></div>`
+      + `<div class="fc-note">ข้อมูลจริง ${fmtDur(ff.realSec / 60)} แรก (${ff.block})`
+      + (estMin > 0
+         ? `<br>อีก ${fmtDur(estMin)} ท่าจาก ${ff.filler} เล่นซ้ำ · อุณหภูมิอนุมานจากสมการ`
+         : '')
+      + `</div>`;
+}
+
+// ── interpSpeed — หาค่าอ้างอิงของความเร็วที่ขอ ──
+// มีข้อมูลจริงแค่ 3 จุด (30 / 50 / 100%) ค่าอื่นต้องประมาณเชิงเส้น
+// คืน exact=true เฉพาะเมื่อตรงจุดที่วัดจริง — ใช้ติดป้ายใน UI
+function interpSpeed(pct) {
+    const S = FORECAST_CAL.speeds;
+    const hit = S.find(s => s.pct === pct);
+    if (hit) return { ...hit, exact: true };
+
+    if (pct <= S[0].pct) return { ...S[0], pct, exact: false, clamped: 'ต่ำกว่าข้อมูลที่มี' };
+    if (pct >= S[2].pct) return { ...S[2], pct, exact: false, clamped: 'สูงกว่าข้อมูลที่มี' };
+
+    const i = pct < S[1].pct ? 0 : 1;
+    const a = S[i], b = S[i + 1];
+    const w = (pct - a.pct) / (b.pct - a.pct);
+    const mix = (x, y) => x + (y - x) * w;
+    return {
+        pct, exact: false,
+        runSec:    mix(a.runSec,    b.runSec),
+        rotPerHr:  mix(a.rotPerHr,  b.rotPerHr),
+        iRms:      mix(a.iRms,      b.iRms),
+    };
+}
+
+// ── forecastRun — คำนวณผลการเดินต่อเนื่อง ──
+//   speedPct     ความเร็วที่ user ตั้ง (%)
+//   durationMin  ระยะเวลาที่ถาม (นาที)
+//   temps0       อุณหภูมิ 6 ข้อ ณ ตอนนี้ (วัดสดจากรอบที่เพิ่งเดิน)
+//   iRms         กระแสรวมที่วัดได้จริง (ไว้เทียบกับค่าอ้างอิง)
+function forecastRun({ speedPct, durationMin, temps0, iRms, ambientC }) {
+    const cal = FORECAST_CAL;
+    const sp = interpSpeed(speedPct);
+    const t = durationMin;
+    const amb = Number.isFinite(ambientC) ? ambientC : cal.ambientRef;
+
+    // อุณหภูมิรายข้อที่เวลา t
+    // เพดานเลื่อนตามอุณหภูมิห้อง — ห้องร้อนขึ้น 5° เพดานขึ้น 5° ตามกันทุกข้อ
+    const joints = temps0.map((T0, i) => {
+        const tInf = amb + cal.riseC[i], tau = cal.tauMin[i];
+        const at = tInf - (tInf - T0) * Math.exp(-t / tau);
+        return {
+            joint: i + 1, now: T0, at: at, tInf,
+            rise: at - T0,
+            // ถึง 95% ของการไต่ที่ 3τ
+            settleMin: 3 * tau,
+        };
+    });
+
+    const hottest = joints.reduce((a, b) => (b.at > a.at ? b : a));
+    const hours = t / 60;
+    const runs = (t * 60) / sp.runSec;
+    const rotation = sp.rotPerHr * hours;
+
+    // เทียบกับความเร็วปกติ 50% เป็นฐาน
+    const base = cal.speeds[1];
+    const workRatio = sp.rotPerHr / base.rotPerHr;
+
+    const notes = [];
+    if (!sp.exact) {
+        notes.push(sp.clamped
+            ? `ความเร็ว ${speedPct}% ${sp.clamped} (วัดจริงแค่ 30 / 50 / 100%) ใช้ค่าที่ใกล้ที่สุด`
+            : `ความเร็ว ${speedPct}% ไม่มีข้อมูลตรง ประมาณเชิงเส้นจาก 30 / 50 / 100%`);
+    }
+    if (Number.isFinite(iRms)) {
+        const d = Math.abs(iRms - sp.iRms) / sp.iRms;
+        if (d > 0.15) {
+            notes.push(`กระแสเฉลี่ยของรอบ ${iRms.toFixed(2)} A ต่างจากค่าอ้างอิง `
+                     + `${sp.iRms.toFixed(2)} A เกิน 15% — คำทำนายอุณหภูมิอาจคลาดเคลื่อน`);
+        }
+    }
+    // ข้อมูลเพื่อนต่อเนื่องยาวสุด 43.7 นาที (long_run) เลยจากนี้ไม่มีข้อมูลจริงยืนยัน
+    if (t > 43.7) {
+        notes.push(`เกิน 43.7 นาทีที่มีข้อมูลจริงต่อเนื่อง — อุณหภูมิช่วง `
+                 + `${(t - 43.7).toFixed(0)} นาทีหลังเป็นค่าอนุมาน`);
+    }
+
+    const safe = hottest.at < 50;
+    return {
+        speed: sp, durationMin: t, ambientC: amb,
+        joints, hottest,
+        runs, rotation, workRatio,
+        settleMin: hottest.settleMin,
+        safe,
+        verdict: safe
+            ? `เดินต่อเนื่อง ${(t / 60).toFixed(1)} ชั่วโมงได้ปลอดภัย — `
+            + `อุณหภูมิเข้าสมดุลที่ ${hottest.at.toFixed(1)}°C ไม่ไต่หนี ไม่พบสัญญาณเสื่อมสภาพ`
+            : `อุณหภูมิคาดว่าจะถึง ${hottest.at.toFixed(1)}°C ควรตรวจสอบเพิ่มเติม`,
+        notes,
+    };
+}
+
+// ── หน้าจอตั้งพารามิเตอร์แล้วทำนาย ──
+// กดปุ่ม → สั่ง replay.py เดินจริง 1 รอบ → พอจบเอาอุณหภูมิที่วัดได้ไปเข้าสมการ
+function onReplayStatus(s) {
+    const bar = document.getElementById('fc-bar');
+    const out = document.getElementById('fc-out');
+    const btn = document.getElementById('fc-go');
+    if (!bar || !out || !btn) return;
+
+    if (s.state === 'start') {
+        state.iAcc = { sum: 0, n: 0 };
+        bar.classList.remove('hidden');
+        bar.firstElementChild.style.width = '0%';
+        out.innerHTML = `<div class="fc-line">กำลังเดิน <b>${s.run_id}</b> `
+                      + `${s.run_seconds} วินาที</div>`;
+        // โหมดเร่งเวลา: เตรียมตัวนับให้ applyTimelapse ใช้
+        state.ff = s.mode === 'ff' ? {
+            pct: s.speed_pct, T: s.duration_sec, watch: s.watch_sec, mult: s.mult,
+            realSec: s.real_sec, block: s.block, filler: s.filler,
+            amb: fcNum('fc-amb'), simSec: 0, real: true, done: false,
+        } : null;
+        if (state.ff) out.innerHTML = `<div class="fc-line">⏩ เริ่มเร่ง ${s.mult}× …</div>`;
+    } else if (s.state === 'playing') {
+        bar.firstElementChild.style.width = (s.progress * 100).toFixed(0) + '%';
+    } else if (s.state === 'done') {
+        bar.classList.add('hidden');
+        btn.disabled = false;
+        if (s.mode === 'ff' && state.ff) {
+            state.ff.done = true;       // เฟรมที่มาช้ายังแทนอุณหภูมิต่อ แต่ไม่วาดทับผลสรุป
+            renderFFResult();
+        } else {
+            renderForecast(s);
+        }
+    } else if (s.state === 'error' || s.state === 'busy') {
+        bar.classList.add('hidden');
+        btn.disabled = false;
+        out.innerHTML = `<div class="fc-note">${s.message || s.state}</div>`;
+    }
+}
+
+function renderForecast(s) {
+    const out = document.getElementById('fc-out');
+    const temps = state.lastTemps;
+    if (!temps) {
+        out.innerHTML = '<div class="fc-note">ยังไม่ได้รับอุณหภูมิ — ต่อ broker แล้วลองใหม่</div>';
+        return;
+    }
+    const dur = fcDuration();
+    const r = forecastRun({
+        speedPct: fcNum('fc-speed'),
+        durationMin: dur,
+        temps0: temps,
+        iRms: state.iAcc?.n ? state.iAcc.sum / state.iAcc.n : state.lastIRms,
+        ambientC: fcNum('fc-amb'),
+    });
+
+    out.innerHTML =
+        `<div class="fc-head ${r.safe ? 'ok' : 'bad'}">`
+      + `${r.safe ? '✓' : '⚠'} เดินต่อเนื่อง ${fmtDur(dur)}</div>`
+      + `<div class="fc-line">อุณหภูมิ J${r.hottest.joint} `
+      + `<b>${r.hottest.now.toFixed(1)}°C → ${r.hottest.at.toFixed(1)}°C</b> `
+      + `(เพดาน ${r.hottest.tInf}°C)</div>`
+      // ที่ 3τ ไต่ไปแล้ว 95% เสมอ แต่ระยะที่เหลือเป็นองศาขึ้นกับจุดเริ่ม เลยบอกเป็น %
+      + `<div class="fc-line">อุณหภูมิเกือบถึงเพดาน (ไต่ไปแล้ว 95%) `
+      + `นาทีที่ <b>${Math.round(r.settleMin)}</b></div>`
+      + `<div class="fc-line">ปริมาณงาน <b>${Math.round(r.runs)} รอบ</b> · `
+      + `หมุนสะสม <b>${Math.round(r.rotation)} rad</b></div>`
+      + `<div class="fc-line">เทียบความเร็วปกติ <b>${r.workRatio.toFixed(2)} เท่า</b></div>`
+      + `<div class="fc-note">วัดสด: อุณหภูมิเริ่มต้น · กระแสเฉลี่ยของรอบ<br>`
+      + `จากข้อมูลเพื่อน: เวลาต่อรอบ · หมุนต่อรอบ · τ · เพดาน<br>`
+      + `อนุมาน: อุณหภูมิปลายทาง (τ จากข้อมูลจริง 43.7 นาที)`
+      + (r.notes.length ? '<br>' + r.notes.join('<br>') : '') + `</div>`;
+}
+
+function initForecastPanel() {
+    const btn = document.getElementById('fc-go');
+    if (!btn) return;
+
+    // กล่องแผนคำนวณใหม่ตอนกด Enter หรือคลิกออกจากช่อง
+    // ไม่ใช้ 'input' เพราะ fcNum บีบค่ากลางคันตอนยังพิมพ์ไม่จบ
+    for (const id of ['fc-speed', 'fc-hr', 'fc-min']) {
+        document.getElementById(id)?.addEventListener('change', renderPlan);
+    }
+    renderPlan();
+
+    btn.addEventListener('click', () => {
+        if (!state.mqttClient || !state.mqttConnected) {
+            document.getElementById('fc-out').innerHTML =
+                '<div class="fc-note">ยังไม่ได้ต่อ broker — กด Connect ก่อน</div>';
+            return;
+        }
+        renderPlan();
+        btn.disabled = true;
+        document.getElementById('fc-out').innerHTML =
+            '<div class="fc-line">กำลังส่งคำสั่ง…</div>';
+        // บอกแค่เวลา ตัวคูณให้ replay.py คิดเอง (สูตรเดียวกับ renderPlan)
+        state.mqttClient.publish('ur/command', JSON.stringify({
+            cmd: 'ff',
+            speed_pct:    ffSpeed(fcNum('fc-speed')),
+            duration_min: fcDuration(),
+            watch_sec:    FF_WATCH_SEC,
+        }));
+    });
+}
+initForecastPanel();
+
+
+// เปิดให้เรียกจาก DevTools Console — app.js โหลดเป็น ES module
+window.forecastRun = forecastRun;
+window.FORECAST_CAL = FORECAST_CAL;
 // ── MODEL_RELIANCE — โมเดลพึ่งช่องสัญญาณไหนตัดสินแต่ละคลาส ──
 //
 // วัดด้วยวิธี occlusion: ปิดบังทีละช่องจาก 23 ช่อง แล้วดูว่าความมั่นใจตกเท่าไหร่
@@ -2516,6 +2906,17 @@ function renderHealthPanel(p) {
     }
 
     const temps = p.joint_temperatures.map(Number);
+        state.lastTemps = temps;
+    if (Array.isArray(p.actual_current)) {
+        const c = p.actual_current.map(Number);
+        if (c.every(Number.isFinite)) {
+            const i = Math.sqrt(c.reduce((s, v) => s + v * v, 0));
+            state.lastIRms = i;
+            // สะสมไว้หาค่าเฉลี่ยทั้งรอบ ค่าอ้างอิง 1.74 A เป็นค่าเฉลี่ย ต้องเทียบกับค่าเฉลี่ย
+            // onReplayStatus ล้างตัวสะสมทุกครั้งที่เริ่มรอบใหม่
+            if (state.iAcc) { state.iAcc.sum += i; state.iAcc.n++; }
+        }
+    }
     const row = (name, raw, unit, band, digits) => {
         const v = Number(raw);
         if (!Number.isFinite(v)) return '';
@@ -2659,7 +3060,7 @@ function connectMQTT() {
         // ur/prediction ไม่ได้ผูกกับ joint ไหน ต้อง subscribe เพิ่มเองเสมอ
         const topics = dom.mqttDiscover?.checked
             ? [...new Set([...bound, '#'])]
-            : [...new Set([...bound, 'ur/prediction'])];
+            : [...new Set([...bound, 'ur/prediction', 'ur/replay_status'])];
 
         if (bound.length === 0) {
             console.warn('MQTT: ยังไม่มี joint ตัวไหนตั้ง MQTT Topic — 3D ยังไม่ขยับ แต่ Discover จะเก็บ payload ไว้ให้เลือกใน Add/Edit Joint');
@@ -2692,7 +3093,7 @@ function connectMQTT() {
         catch (e) { payload = parseFloat(text); }
 
                 // ── ผลทำนายจากโมเดล AI — ไม่ใช่ค่า joint จึงจัดการแยกแล้วจบเลย ──
-        if (topic === 'ur/prediction') { renderAIPanel(payload); return; }
+        if (topic === 'ur/replay_status') { onReplayStatus(payload); return; }
 
         // เก็บ payload ล่าสุดต่อ topic ไว้ให้ Payload Inspector
         const rec = state.lastPayloads[topic] || { count: 0 };
@@ -2701,6 +3102,7 @@ function connectMQTT() {
         rec.ts = Date.now();
         state.lastPayloads[topic] = rec;
 
+        applyTimelapse(payload);
         recordNetStats(payload);
         renderHealthPanel(payload);
 
@@ -2793,6 +3195,36 @@ function truncate(str, len) {
 }
 
 // ============================================================
+// autoSetupJoints — ตั้ง joint + offset ให้เองทันทีที่โหลดโมเดล UR3
+//
+// ตอบคำถามอาจารย์ข้อ 1: set offset ไว้ให้แต่แรกได้
+// ค่ามาจาก ur3_default.dtwp ในโฟลเดอร์โปรเจกต์ (offset ที่หาจากข้อมูลหุ่นจริงแล้ว)
+// ผู้ใช้โหลด .glb อย่างเดียว ไม่ต้องกด Open Project ไม่ต้องพิมพ์เลขเอง
+// อยากได้ค่าใหม่: รัน analysis/fit_joint_mapping.py --write แล้วเอาไฟล์มาแทน
+// ============================================================
+const UR3_DEFAULT_PROJECT = './ur3_default.dtwp';
+
+async function autoSetupJoints() {
+    // ทำเฉพาะโมเดล UR3 — ดูจากชื่อกระดูกที่ ur3.glb มี
+    // โมเดลอื่นปล่อยว่างไว้ให้ผู้ใช้ตั้ง joint เองเหมือนเดิม
+    const names = new Set([...state.nodeMap.values()].map(n => n.name));
+    if (!names.has('ShoulderBone') || !names.has('ToolBone')) return;
+
+    try {
+        // no-store: แก้ไฟล์ .dtwp แล้วเห็นผลทันที ไม่ติด cache
+        const r = await fetch(UR3_DEFAULT_PROJECT, { cache: 'no-store' });
+        if (!r.ok) throw new Error(`ไม่พบ ${UR3_DEFAULT_PROJECT} (${r.status})`);
+        const { total, ok, failed } = applyProjectData(await r.json());
+        console.log(`[auto] ตั้ง joint UR3 จาก ${UR3_DEFAULT_PROJECT} แล้ว ${ok}/${total} ข้อ`);
+        if (failed) alert(`ตั้ง joint อัตโนมัติได้ ${ok}/${total} ข้อ (ล้มเหลว ${failed})`);
+    } catch (e) {
+        // ไม่มีไฟล์ก็ไม่เป็นไร ผู้ใช้ยังตั้งเองหรือกด Open Project ได้
+        console.warn('[auto] ตั้ง joint อัตโนมัติไม่สำเร็จ:', e.message);
+    }
+}
+
+
+// ============================================================
 // Event Bindings — ผูก event listener ทั้งหมดครั้งเดียวตอน init
 // แยกออกมาจาก init เพื่อความอ่านง่าย
 // ============================================================
@@ -2801,7 +3233,7 @@ function bindEvents() {
     dom.btnUpload.addEventListener('click', () => dom.fileInput.click());
     dom.fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (file) loadModel(file);
+        if (file) loadModel(file, autoSetupJoints);
         e.target.value = '';   // reset ให้ select ไฟล์เดิมซ้ำได้
     });
 
@@ -2813,7 +3245,8 @@ function bindEvents() {
     dom.viewportContainer.addEventListener('drop', (e) => {
         e.preventDefault();
         const file = e.dataTransfer.files[0];
-        if (file && (file.name.endsWith('.glb') || file.name.endsWith('.gltf'))) loadModel(file);
+        if (file && (file.name.endsWith('.glb') || file.name.endsWith('.gltf')))
+            loadModel(file, autoSetupJoints);
     });
 
     // ── Add Joint modal ──

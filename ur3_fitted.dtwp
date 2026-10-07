@@ -1,0 +1,215 @@
+{
+  "version": 1,
+  "exportedAt": "2026-10-03T20:12:53.008519+00:00",
+  "jointIdCounter": 12,
+  "presetIdCounter": 0,
+  "keyframeIdCounter": 0,
+  "joints": [
+    {
+      "id": "joint_6",
+      "name": "1 Shoulder Pan",
+      "nodeUUIDs": [
+        "8f2a26a1-45b9-40e2-88b2-86094e289682"
+      ],
+      "nodeNames": [
+        "ShoulderBone"
+      ],
+      "pivotNodeUUID": "centroid",
+      "pivotNodeName": "centroid",
+      "property": "rotation.y",
+      "min": -6.29,
+      "max": 6.29,
+      "step": 0.01,
+      "value": 4.349335770606995,
+      "simPattern": "none",
+      "simPeriod": 3,
+      "jointType": "revolute",
+      "coupledTarget": null,
+      "coupledRatio": 1,
+      "srcTopic": "ur/telemetry",
+      "srcPath": "actual_q[0]",
+      "scale": 1,
+      "offset": 3.103,
+      "invert": false,
+      "unit": "rad",
+      "baseValues": {
+        "8f2a26a1-45b9-40e2-88b2-86094e289682": 0
+      },
+      "baseValuesByName": {
+        "ShoulderBone": 0
+      }
+    },
+    {
+      "id": "joint_7",
+      "name": "2 Shoulder Lift",
+      "nodeUUIDs": [
+        "f8378235-d8ac-4b1b-ab3e-b3e1232a5551"
+      ],
+      "nodeNames": [
+        "UpperArmBone1"
+      ],
+      "pivotNodeUUID": "centroid",
+      "pivotNodeName": "centroid",
+      "property": "rotation.y",
+      "min": -6.29,
+      "max": 6.29,
+      "step": 0.01,
+      "value": -0.27072069217216277,
+      "simPattern": "none",
+      "simPeriod": 3,
+      "jointType": "revolute",
+      "coupledTarget": null,
+      "coupledRatio": 1,
+      "srcTopic": "ur/telemetry",
+      "srcPath": "actual_q[1]",
+      "scale": 1,
+      "offset": 1.279,
+      "invert": false,
+      "unit": "rad",
+      "baseValues": {
+        "f8378235-d8ac-4b1b-ab3e-b3e1232a5551": 0
+      },
+      "baseValuesByName": {
+        "UpperArmBone1": 0
+      }
+    },
+    {
+      "id": "joint_8",
+      "name": "3 Elbow",
+      "nodeUUIDs": [
+        "04b105a6-3fdb-4745-af7d-c3210e5c567c"
+      ],
+      "nodeNames": [
+        "ForeArmBone1"
+      ],
+      "pivotNodeUUID": "centroid",
+      "pivotNodeName": "centroid",
+      "property": "rotation.y",
+      "min": -6.29,
+      "max": 6.29,
+      "step": 0.01,
+      "value": 1.8240932836532593,
+      "simPattern": "none",
+      "simPeriod": 3,
+      "jointType": "revolute",
+      "coupledTarget": null,
+      "coupledRatio": 1,
+      "srcTopic": "ur/telemetry",
+      "srcPath": "actual_q[2]",
+      "scale": 1,
+      "offset": 0.264,
+      "invert": true,
+      "unit": "rad",
+      "baseValues": {
+        "04b105a6-3fdb-4745-af7d-c3210e5c567c": -2.9776657442735273e-08
+      },
+      "baseValuesByName": {
+        "ForeArmBone1": -2.9776657442735273e-08
+      }
+    },
+    {
+      "id": "joint_9",
+      "name": "4 Wrist 1",
+      "nodeUUIDs": [
+        "23d15a4f-2b8d-425a-8e25-a2bc331959b8"
+      ],
+      "nodeNames": [
+        "WristBone"
+      ],
+      "pivotNodeUUID": "centroid",
+      "pivotNodeName": "centroid",
+      "property": "rotation.y",
+      "min": -6.29,
+      "max": 6.29,
+      "step": 0.01,
+      "value": 0.5256772632203162,
+      "simPattern": "none",
+      "simPeriod": 3,
+      "jointType": "revolute",
+      "coupledTarget": null,
+      "coupledRatio": 1,
+      "srcTopic": "ur/telemetry",
+      "srcPath": "actual_q[3]",
+      "scale": 1,
+      "offset": 2.125,
+      "invert": false,
+      "unit": "rad",
+      "baseValues": {
+        "23d15a4f-2b8d-425a-8e25-a2bc331959b8": -4.768371301090447e-07
+      },
+      "baseValuesByName": {
+        "WristBone": -4.768371301090447e-07
+      }
+    },
+    {
+      "id": "joint_10",
+      "name": "5 Wrist 2",
+      "nodeUUIDs": [
+        "4156ee83-5665-4069-9b6b-55c28ce790ad"
+      ],
+      "nodeNames": [
+        "ToolInterfaceBone"
+      ],
+      "pivotNodeUUID": "centroid",
+      "pivotNodeName": "centroid",
+      "property": "rotation.y",
+      "min": -6.29,
+      "max": 6.29,
+      "step": 0.01,
+      "value": 1.5709594020843505,
+      "simPattern": "none",
+      "simPeriod": 3,
+      "jointType": "revolute",
+      "coupledTarget": null,
+      "coupledRatio": 1,
+      "srcTopic": "ur/telemetry",
+      "srcPath": "actual_q[4]",
+      "scale": 1,
+      "offset": 0.001,
+      "invert": false,
+      "unit": "rad",
+      "baseValues": {
+        "4156ee83-5665-4069-9b6b-55c28ce790ad": -4.7683706393117557e-07
+      },
+      "baseValuesByName": {
+        "ToolInterfaceBone": -4.7683706393117557e-07
+      }
+    },
+    {
+      "id": "joint_11",
+      "name": "6 Wrist 3",
+      "nodeUUIDs": [
+        "a0a10e8a-ffdd-431a-96e8-817f4368d265"
+      ],
+      "nodeNames": [
+        "ToolBone"
+      ],
+      "pivotNodeUUID": "centroid",
+      "pivotNodeName": "centroid",
+      "property": "rotation.y",
+      "min": -6.29,
+      "max": 6.29,
+      "step": 0.01,
+      "value": -8.190467484781536,
+      "simPattern": "none",
+      "simPeriod": 3,
+      "jointType": "continuous",
+      "coupledTarget": null,
+      "coupledRatio": 1,
+      "srcTopic": "ur/telemetry",
+      "srcPath": "actual_q[5]",
+      "scale": 1,
+      "offset": 0,
+      "invert": false,
+      "unit": "rad",
+      "baseValues": {
+        "a0a10e8a-ffdd-431a-96e8-817f4368d265": 4.233233581339855e-06
+      },
+      "baseValuesByName": {
+        "ToolBone": 4.233233581339855e-06
+      }
+    }
+  ],
+  "presets": [],
+  "keyframes": []
+}

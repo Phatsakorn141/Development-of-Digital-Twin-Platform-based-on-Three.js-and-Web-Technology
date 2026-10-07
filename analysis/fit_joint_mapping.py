@@ -124,6 +124,8 @@ def main():
     ap.add_argument("--run", default="payload_heavy_001")
     ap.add_argument("--frames", type=int, default=24, help="สุ่มกี่เฟรมมาใช้ฟิต")
     ap.add_argument("--dtwp", default="", help="ระบุไฟล์ .dtwp เอง (ปกติใช้ตัวล่าสุดใน Downloads)")
+    ap.add_argument("--write", nargs="?", const="ur3_fitted.dtwp", default="",
+                    help="เขียนผลเป็นไฟล์ .dtwp พร้อมเปิดใช้ ไม่ต้องกรอกเลขเอง")
     args = ap.parse_args()
 
     dtwp = args.dtwp or max(glob.glob(os.path.expanduser(r"~\Downloads\*.dtwp")),
@@ -242,7 +244,27 @@ def main():
                     for (_, _, p), (_, tp) in zip(targets, sim)])
     print(f"\nคลาดเคลื่อนเฉลี่ย  ทิศเครื่องมือ {math.degrees(derr):.1f}°   "
           f"ระยะแนวราบ {herr*1000:.0f} มม.")
-    print("\nเอาค่า invert/offset ข้างบนไปใส่ใน Edit Joint ของแต่ละข้อ")
+    # ── เขียนผลกลับเป็นไฟล์ — ตอบคำถามอาจารย์ข้อ 1 ──
+    # ไม่ต้องจดเลขไปกรอกใน Edit Joint เอง ได้ไฟล์ .dtwp ที่เว็บโหลดได้ทันที
+    if args.write:
+        from datetime import datetime, timezone
+        out = args.write if os.path.isabs(args.write) else os.path.join(ROOT, args.write)
+        for k, n in enumerate(NAMES):
+            # ข้อ 6 หมุนรอบแกนตัวเอง ตำแหน่งกับทิศแกน Y ของ ToolBone ไม่เปลี่ยนตาม
+            # สคริปต์จึงหาค่าข้อนี้ไม่ได้ (ได้ค่ามั่วทุกครั้ง) — คงค่าเดิมจากไฟล์ต้นทางไว้
+            if k == 5:
+                continue
+            j = jm[n]                      # dict เดียวกับใน d["joints"] แก้ตรงนี้ = แก้ในไฟล์
+            j["offset"]   = round(float(best_x[k]), 3)
+            j["invert"]   = bool(best_combo[k] < 0)
+            j["property"] = "rotation." + axis_for[k]
+        d["exportedAt"] = datetime.now(timezone.utc).isoformat()
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, indent=2)
+        print(f"\nเขียนแล้ว : {out}   (ข้อ 6 คงค่าเดิมจาก {os.path.basename(dtwp)})")
+    else:
+        print("\nเอาค่า invert/offset ข้างบนไปใส่ใน Edit Joint ของแต่ละข้อ (ยกเว้นข้อ 6)")
+        print("หรือรันซ้ำพร้อม --write เพื่อให้เขียนไฟล์ .dtwp ให้เลย")
 
 
 if __name__ == "__main__":

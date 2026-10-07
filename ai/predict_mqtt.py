@@ -285,6 +285,9 @@ def main():
             p = json.loads(msg.payload)
         except Exception:
             return
+        # โหมดเร่งเวลาส่งแถวที่ข้ามมา 125 แถวไม่ใช่ 1 วินาทีจริง ทายไม่ได้ ข้ามไป
+        if p.get("ff", 1) > 1:
+            return
         r = pred.feed(p)
         if not r:
             return

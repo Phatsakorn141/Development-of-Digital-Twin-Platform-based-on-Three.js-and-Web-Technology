@@ -133,6 +133,31 @@
                 <div id="hp-rows"></div>
                 <div id="hp-temps" class="hp-temps"></div>
             </div>
+                        <!-- ตั้งพารามิเตอร์แล้วให้ระบบทำนาย — วัดจริง 1 รอบ อนุมานด้วยสมการความร้อน -->
+            <div id="fc-panel">
+                <div class="hp-label">FORECAST</div>
+                <div class="fc-row">
+                    <label for="fc-speed">ความเร็ว (%)</label>
+                    <input type="text" id="fc-speed" inputmode="decimal"
+                           value="50" placeholder="10-100">
+                </div>
+                <div class="fc-row">
+                    <label>เดินต่อเนื่อง</label>
+                    <div class="fc-time">
+                        <input type="text" id="fc-hr"  inputmode="numeric" value="2"><span>ชม.</span>
+                        <input type="text" id="fc-min" inputmode="numeric" value="0"><span>นาที</span>
+                    </div>
+                </div>
+                <div class="fc-row">
+                    <label for="fc-amb">อุณหภูมิห้อง (°C)</label>
+                    <input type="text" id="fc-amb" inputmode="decimal"
+                           value="24.2" placeholder="5-45">
+                </div>
+                <div id="fc-plan" class="fc-plan"></div>
+                <button id="fc-go">เริ่มวิเคราะห์</button>
+                <div id="fc-bar" class="fc-bar hidden"><i></i></div>
+                <div id="fc-out"></div>
+            </div>
             <!-- สรุปวินิจฉัย — รวมคำทำนาย AI + ค่าเซนเซอร์ + ลายเซ็นรายข้อ -->
             <div id="diag-panel" class="hidden">
                 <div class="hp-label">DIAGNOSIS</div>
