@@ -117,52 +117,68 @@
             </div>
             <!-- สถิติคุณภาพการรับข้อมูล — latency / rate / jitter / ข้อความหาย -->
             <div id="net-stats"><span>ไม่ได้เชื่อมต่อ</span></div>
-                        <!-- ผลทำนายสดจากโมเดล AI — มาทาง topic ur/prediction ที่ predict_mqtt.py ส่ง -->
-            <div id="ai-panel" class="hidden">
-                <div class="ai-label">AI PREDICTION</div>
-                <div class="ai-main">
-                    <span id="ai-pred">—</span>
-                    <span id="ai-conf"></span>
-                </div>
-                <div id="ai-truth" class="ai-truth"></div>
-                <div id="ai-bars" class="ai-bars"></div>
-            </div>
-            <!-- สถานะกายภาพสด — คำนวณในเบราว์เซอร์จาก ur/telemetry ตรงๆ -->
-            <div id="health-panel" class="hidden">
-                <div class="hp-label">SENSOR STATUS</div>
-                <div id="hp-rows"></div>
-                <div id="hp-temps" class="hp-temps"></div>
-            </div>
-                        <!-- ตั้งพารามิเตอร์แล้วให้ระบบทำนาย — วัดจริง 1 รอบ อนุมานด้วยสมการความร้อน -->
-            <div id="fc-panel">
-                <div class="hp-label">FORECAST</div>
-                <div class="fc-row">
-                    <label for="fc-speed">ความเร็ว (%)</label>
-                    <input type="text" id="fc-speed" inputmode="decimal"
-                           value="50" placeholder="10-100">
-                </div>
-                <div class="fc-row">
-                    <label>เดินต่อเนื่อง</label>
-                    <div class="fc-time">
-                        <input type="text" id="fc-hr"  inputmode="numeric" value="2"><span>ชม.</span>
-                        <input type="text" id="fc-min" inputmode="numeric" value="0"><span>นาที</span>
+            <!-- แผงลอยฝั่งซ้าย — เรียงต่อกันแนวตั้ง ไม่ทับกัน · คลิกหัวแผงเพื่อพับ -->
+            <div class="panel-col left">
+                <!-- ตั้งพารามิเตอร์แล้วให้ระบบทำนาย — วัดจริง 1 รอบ อนุมานด้วยสมการความร้อน -->
+                <div id="fc-panel">
+                    <div class="hp-label">FORECAST</div>
+                    <div class="fc-row">
+                        <label for="fc-speed">ความเร็ว (%)</label>
+                        <input type="text" id="fc-speed" inputmode="decimal"
+                               value="50" placeholder="10-100">
+                    </div>
+                    <div class="fc-row">
+                        <label>เดินต่อเนื่อง</label>
+                        <div class="fc-time">
+                            <input type="text" id="fc-hr"  inputmode="numeric" value="2"><span>ชม.</span>
+                            <input type="text" id="fc-min" inputmode="numeric" value="0"><span>นาที</span>
+                        </div>
+                    </div>
+                    <div class="fc-row">
+                        <label for="fc-amb">อุณหภูมิห้อง (°C)</label>
+                        <input type="text" id="fc-amb" inputmode="decimal"
+                               value="24.2" placeholder="5-45">
+                    </div>
+                    <div id="fc-plan" class="fc-plan"></div>
+                    <button id="fc-go">เริ่มวิเคราะห์</button>
+                    <div id="fc-bar" class="fc-bar hidden"><i></i></div>
+                    <div id="fc-out"></div>
+                    <!-- เตือนมุม ความเร็ว อุณหภูมิ + ค่าที่หาได้ระหว่างทำงาน — อยู่ในแผงเดียวกับ FORECAST -->
+                    <!-- คลิกคำว่า ALERTS เพื่อพับเฉพาะส่วนนี้ -->
+                    <div id="alert-panel" class="hidden">
+                        <div class="hp-label">ALERTS</div>
+                        <div id="al-head" class="diag-head">—</div>
+                        <div id="al-list"></div>
+                        <div id="al-joints" class="al-grid"></div>
+                        <button id="al-daily-btn">ประวัติอุณหภูมิรายวัน</button>
+                        <div id="al-daily" class="al-grid"></div>
                     </div>
                 </div>
-                <div class="fc-row">
-                    <label for="fc-amb">อุณหภูมิห้อง (°C)</label>
-                    <input type="text" id="fc-amb" inputmode="decimal"
-                           value="24.2" placeholder="5-45">
-                </div>
-                <div id="fc-plan" class="fc-plan"></div>
-                <button id="fc-go">เริ่มวิเคราะห์</button>
-                <div id="fc-bar" class="fc-bar hidden"><i></i></div>
-                <div id="fc-out"></div>
             </div>
-            <!-- สรุปวินิจฉัย — รวมคำทำนาย AI + ค่าเซนเซอร์ + ลายเซ็นรายข้อ -->
-            <div id="diag-panel" class="hidden">
-                <div class="hp-label">DIAGNOSIS</div>
-                <div id="diag-head" class="diag-head">—</div>
-                <div id="diag-body"></div>
+            <!-- แผงลอยฝั่งขวา -->
+            <div class="panel-col right">
+                <!-- ผลทำนายสดจากโมเดล AI — มาทาง topic ur/prediction ที่ predict_mqtt.py ส่ง -->
+                <div id="ai-panel" class="hidden">
+                    <div class="ai-label">AI PREDICTION</div>
+                    <div class="ai-main">
+                        <span id="ai-pred">—</span>
+                        <span id="ai-conf"></span>
+                    </div>
+                    <div id="ai-truth" class="ai-truth"></div>
+                    <div id="ai-bars" class="ai-bars"></div>
+                </div>
+                <!-- สถานะกายภาพสด — คำนวณในเบราว์เซอร์จาก ur/telemetry ตรงๆ -->
+                <div id="health-panel" class="hidden">
+                    <div class="hp-label">SENSOR STATUS</div>
+                    <div id="hp-rows"></div>
+                    <div id="hp-temps" class="hp-temps"></div>
+                </div>
+                <!-- สรุปวินิจฉัย — รวมคำทำนาย AI + ค่าเซนเซอร์ + ลายเซ็นรายข้อ -->
+                <div id="diag-panel" class="hidden">
+                    <div class="hp-label">DIAGNOSIS</div>
+                    <div id="diag-head" class="diag-head">—</div>
+                    <div id="diag-body"></div>
+                </div>
             </div>
         </section>
 

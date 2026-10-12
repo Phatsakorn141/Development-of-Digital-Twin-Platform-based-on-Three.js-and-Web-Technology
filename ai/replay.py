@@ -16,13 +16,10 @@ import argparse, bisect, json, time, sys, threading
 import psycopg
 import paho.mqtt.client as mqtt
 
-# ── ต้นทาง: container friend226 ──
-DB_DSN = "host=localhost port=5433 dbname=ur_anomaly user=ur_admin password=password"
-
-# ── ปลายทาง: broker เดียวกับ ur3_publisher.py ──
-MQTT_BROKER = "localhost"
-MQTT_PORT   = 1883
-MQTT_TOPIC  = "ur/telemetry"
+# ── ต้นทาง (container friend226) และปลายทาง MQTT — มาจาก config/params.json ──
+from params import (DB_DSN, HZ, FF_FILLER, BROKER as MQTT_BROKER, PORT as MQTT_PORT,
+                    TOPIC_TELEMETRY as MQTT_TOPIC, TOPIC_COMMAND as TOPIC_CMD,
+                    TOPIC_STATUS)
 
 GAP_CAP = 0.5   # ถ้าข้อมูลขาดช่วงเกินเท่านี้ ให้ข้ามไปเลย ไม่ต้องนั่งรอจริง
 
@@ -85,6 +82,9 @@ def to_payload(cols, row, seq, label=None):
     d["t_publish"] = time.time()        # เวลาที่ยิงออก — app.js ใช้วัด latency
     d["pub_seq"]   = seq                # ตัวนับ — app.js ใช้นับข้อความหาย
     d["true_label"] = label             # เฉลย — ใส่ไว้ให้หน้าจอเทียบเฉยๆ โมเดลไม่ได้อ่านช่องนี้
+    # ป้ายบอก predict_mqtt.py ว่าเป็นข้อมูลหุ่นจริงจาก DB เพื่อน ไม่ต้องปรับค่าแบบ URSim
+    # (ถ้าไม่มีช่องนี้ มุมข้อ 6 จะถูกลบ 2π และความสูงปลายแขนลบ 0.261 m ผลทายเพี้ยน)
+    d["replay"] = True
     return d
 
 
@@ -123,8 +123,7 @@ def play(client, cols, rows, speed, dry_run, label=None, on_progress=None):
 # ── โหมดรอรับคำสั่งจากหน้าเว็บ ──
 # เว็บ publish ไป ur/command แล้วเราเล่น run ที่ตรงความเร็วที่ขอ
 # พร้อมรายงานความคืบหน้ากลับไปที่ ur/replay_status ให้เว็บทำแถบโหลดได้
-TOPIC_CMD    = "ur/command"
-TOPIC_STATUS = "ur/replay_status"
+# topic ทั้งสองอยู่ใน params.json → mqtt.topic_command / topic_status
 
 # ความเร็วที่ user ตั้ง → run prefix ที่วัดไว้จริง
 # มีข้อมูลแค่ 3 จุด ค่าอื่นเลือกตัวใกล้สุดแล้วติดป้ายว่าประมาณ
@@ -159,9 +158,9 @@ def pick_by_speed(conn, pct):
 #   1. ช่วงที่หุ่นเดินต่อเนื่องจริง   ff_real=True   อุณหภูมิในข้อมูลขึ้นจริง
 #   2. ถ้ายังไม่ครบเวลา เล่นรอบปกติซ้ำ  ff_real=False  ท่าจริง แต่อุณหภูมิวนซ้ำ
 #      เว็บแทนอุณหภูมิช่วงนี้ด้วยสมการความร้อน ต่อจากค่าจริงล่าสุด
-FF_FPS = 125
-# run ที่เอามาเล่นซ้ำต้องเก็บ 125 Hz — baseline_30hz เก็บแค่ 30 Hz ใช้ไม่ได้
-FF_FILLER = {30: "speed_30_001", 50: "cold_start_d3_001", 100: "speed_100_001"}
+FF_FPS = HZ          # ส่งเฟรมเท่าความถี่ข้อมูลจริง (params.json → sampling.hz)
+# run ที่เอามาเล่นซ้ำ (FF_FILLER) อยู่ใน params.json → timelapse.filler
+# ต้องเก็บ 125 Hz — baseline_30hz เก็บแค่ 30 Hz ใช้ไม่ได้
 
 
 def ff_block_ids(conn, pct):

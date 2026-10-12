@@ -9,6 +9,23 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ============================================================
+// PARAMS — พารามิเตอร์กลางจาก config/params.json
+// ไฟล์เดียวกับที่ฝั่ง Python อ่าน (ai/params.py) แก้ที่นั่นที่เดียวเปลี่ยนทั้งระบบ
+// โหลดก่อนโค้ดส่วนอื่นทำงาน (top-level await ใช้ได้เพราะ app.js เป็น module)
+// ============================================================
+const PARAMS = await fetch('./config/params.json', { cache: 'no-store' })
+    .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+    })
+    .catch(e => {
+        alert('อ่าน config/params.json ไม่ได้ — ' + e.message
+            + '\nเช็คว่าเปิดเว็บผ่าน npx serve และไฟล์อยู่ในโฟลเดอร์ config');
+        throw e;
+    });
+window.PARAMS = PARAMS;      // เปิดดูใน DevTools Console ได้
+
+// ============================================================
 // App State — ตัวแปร global ทั้งหมดของแอป
 // เก็บไว้ใน object เดียวเพื่อให้ทุก function เข้าถึงได้ง่าย
 // ============================================================
@@ -2338,31 +2355,28 @@ function flattenPaths(obj, prefix = '', out = []) {
 // ⚠ ความเร็วไม่มีผลต่อความร้อน — วัดแล้วกระแสเท่ากันทั้ง 3 ความเร็ว (1.736-1.741 A)
 //   เพราะกระแสเกือบทั้งหมดใช้ต้านแรงโน้มถ่วง ไม่ใช่เร่งความเร็ว
 //   ความเร็วมีผลกับ "ปริมาณงานต่อชั่วโมง" และ "การสึกหรอเชิงกล" เท่านั้น
+// ค่าทั้งหมดมาจาก config/params.json — ดูที่มาของแต่ละตัวได้ในช่อง "_" ของไฟล์นั้น
 const FORECAST_CAL = {
-    tauMin: [34.3, 46.9, 41.1, 32.6, 36.6, 32.9],   // นาที
-    // ค่าที่อุณหภูมิไต่ขึ้นจากอุณหภูมิห้องจนเข้าสมดุล — วัดจากวันที่เริ่มจากเครื่องเย็น 2 วัน
-    // (20 พ.ค. ห้อง 23.3°C · 26 พ.ค. ห้อง 24.2°C) สองวันต่างกันแค่ ~1°C
-    // ไม่ขึ้นกับความเร็ว เพราะกระแสเท่ากันทุกความเร็ว
-    riseC:  [10.1, 12.6, 15.7, 18.6, 20.9, 21.2],   // °C เหนืออุณหภูมิห้อง
-    ambientRef: 24.2,                                // ค่าเริ่มต้นถ้าผู้ใช้ไม่ระบุ
-    trackErrUrad: [88, 71, 130, 94, 30, 83],
-    speeds: [
-        // runSec: เฉลี่ยรายความเร็ว ไม่รวม long_run (ตัวนั้นคือ 31 รอบต่อกัน)
-        // rotPerHr: หมุนรวม 6 ข้อต่อรอบ (~59 rad) ÷ runSec × 3600
-        { pct:  30, runSec: 138.7, rotPerHr: 1543.1, iRms: 1.741 },
-        { pct:  50, runSec:  86.9, rotPerHr: 2436.7, iRms: 1.736 },
-        { pct: 100, runSec:  47.5, rotPerHr: 4460.2, iRms: 1.736 },
-    ],
+    tauMin:       PARAMS.thermal.tau_min,           // นาที
+    riseC:        PARAMS.thermal.rise_c,            // °C เหนืออุณหภูมิห้อง
+    ambientRef:   PARAMS.thermal.ambient_ref_c,     // ค่าเริ่มต้นถ้าผู้ใช้ไม่ระบุ
+    trackErrUrad: PARAMS.diagnosis.base_err_urad,
+    speeds: PARAMS.measured.speeds.map(s => ({
+        pct:    s.pct,
+        runSec: s.run_sec,
+        // ไม่ได้เก็บไว้ คำนวณเอง: หมุนต่อรอบ ÷ เวลาต่อรอบ × 3600
+        // แก้ run_sec หรือ rot_rad_per_cycle ใน params.json แล้วตัวนี้เปลี่ยนตาม
+        rotPerHr: s.rot_rad_per_cycle / s.run_sec * 3600,
+        iRms:   s.i_rms,
+    })),
 };
 
-// ── ช่วงค่าที่ยอมรับของแต่ละช่อง ──
+// เกณฑ์อุณหภูมิของ Universal Robots — params.json → ur_limits
+const UR_LIMITS = PARAMS.ur_limits;
+
+// ── ช่วงค่าที่ยอมรับของแต่ละช่อง — params.json → forecast_inputs ──
 // ช่องเป็น text แล้ว ผู้ใช้พิมพ์อะไรก็ได้ ต้องบีบเองก่อนเอาไปคำนวณ
-const FC_LIMITS = {
-    'fc-speed': { min: 10, max: 100,  def: 50   },
-    'fc-hr':    { min: 0,  max: 999, def: 2 },
-    'fc-min':   { min: 0,  max: 999, def: 0 },
-    'fc-amb':   { min: 5,  max: 45,   def: 24.2 },
-};
+const FC_LIMITS = PARAMS.forecast_inputs;
 
 // ── fcNum — อ่านช่อง text แล้วบีบให้อยู่ในช่วง ──
 // ถ้าค่าถูกแก้ จะเขียนกลับลงช่องพร้อมขอบสีเหลือง ผู้ใช้จะเห็นว่าโดนปรับ
@@ -2417,9 +2431,9 @@ function fmtSec(sec) {
 // ผู้ใช้บอกแค่เวลาที่อยากรู้ ระบบคูณเอง แล้วดูจบใน FF_WATCH_SEC วินาที
 //   ตัวคูณ = เวลาที่ขอ ÷ เวลาที่ใช้ดู   (2 ชม. ÷ 2 นาที = 60×)
 // ============================================================
-const FF_WATCH_SEC = 120;
-// มีข้อมูลเดินต่อเนื่องจริงแค่ 3 ความเร็วนี้ — ค่าอื่นปัดไปตัวที่ใกล้สุด
-const FF_SPEEDS = [30, 50, 100];
+const FF_WATCH_SEC = PARAMS.timelapse.watch_sec;    // params.json → timelapse.watch_sec
+// มีข้อมูลเดินต่อเนื่องจริงแค่ความเร็วที่วัดไว้ — ค่าอื่นปัดไปตัวที่ใกล้สุด
+const FF_SPEEDS = PARAMS.measured.speeds.map(s => s.pct);
 const ffSpeed = (pct) =>
     FF_SPEEDS.reduce((a, b) => (Math.abs(b - pct) < Math.abs(a - pct) ? b : a));
 
@@ -2495,7 +2509,8 @@ function renderFFResult() {
     const end = ff.temps[h], start = ff.startTemps?.[h];
     const tInf = ff.amb + FORECAST_CAL.riseC[h];
     // เกณฑ์ Universal Robots: เตือน 50°C · ตัดการทำงาน 85°C
-    const level = end >= 85 ? 'bad' : end >= 50 ? 'warn' : 'ok';
+    const level = end >= UR_LIMITS.temp_shutdown_c ? 'bad'
+                : end >= UR_LIMITS.temp_warn_c     ? 'warn' : 'ok';
     const estMin = Math.max(0, ff.T - ff.realSec) / 60;
     out.innerHTML =
         `<div class="fc-head ${level}">${level === 'ok' ? '✓' : '⚠'} `
@@ -2503,7 +2518,8 @@ function renderFFResult() {
       + `<span class="fc-dim">(ดูใน ${fmtSec(ff.watch)} · ${ff.mult.toFixed(1)}×)</span></div>`
       + `<div class="fc-line">อุณหภูมิ J${h + 1} <b>`
       + (start != null ? `${start.toFixed(1)}°C → ` : '') + `${end.toFixed(1)}°C</b> `
-      + `(เพดาน ${tInf.toFixed(1)}°C · เตือน 50 · ตัด 85)</div>`
+      + `(เพดาน ${tInf.toFixed(1)}°C · เตือน ${UR_LIMITS.temp_warn_c} `
+      + `· ตัด ${UR_LIMITS.temp_shutdown_c})</div>`
       + `<div class="fc-line">ปริมาณงาน <b>${(ff.T / sp.runSec).toFixed(1)} รอบ</b> · หมุนสะสม `
       + `<b>${Math.round(sp.rotPerHr * ff.T / 3600).toLocaleString()} rad</b></div>`
       + `<div class="fc-note">ข้อมูลจริง ${fmtDur(ff.realSec / 60)} แรก (${ff.block})`
@@ -2588,7 +2604,7 @@ function forecastRun({ speedPct, durationMin, temps0, iRms, ambientC }) {
                  + `${(t - 43.7).toFixed(0)} นาทีหลังเป็นค่าอนุมาน`);
     }
 
-    const safe = hottest.at < 50;
+    const safe = hottest.at < UR_LIMITS.temp_warn_c;
     return {
         speed: sp, durationMin: t, ambientC: amb,
         joints, hottest,
@@ -2613,6 +2629,8 @@ function onReplayStatus(s) {
 
     if (s.state === 'start') {
         state.iAcc = { sum: 0, n: 0 };
+        resetAlertStats();                   // เริ่มรอบใหม่ ล้างช่วงมุม/หมุนสะสม/เร็วสุด
+        hpEma.err = null; hpEma.n = 0;       // ล้างค่าเฉลี่ยวินิจฉัย ไม่ให้ค่ารอบก่อนค้างมา
         bar.classList.remove('hidden');
         bar.firstElementChild.style.width = '0%';
         out.innerHTML = `<div class="fc-line">กำลังเดิน <b>${s.run_id}</b> `
@@ -2759,11 +2777,29 @@ function renderDiagnosis(p, temps) {
         return;
     }
 
-    const devs = hpEma.err.map((v, i) => (v / HP_BASE_ERR[i] - 1) * 100);
+    // หุ่นหยุดนิ่ง (เช่นเล่นจบแล้ว) — ไม่วิเคราะห์ ค่าเฉลี่ยล่าสุดเก็บไว้ ขยับเมื่อไหร่วิเคราะห์ต่อ
+    if (hpEma.stopped) {
+        head.className = 'diag-head';
+        head.textContent = '⏸ หุ่นหยุดนิ่ง';
+        body.innerHTML = `<div class="diag-line">หุ่นไม่ขยับมาเกิน `
+                       + `${PARAMS.diagnosis.stopped_after_sec} วินาที — พักการวิเคราะห์ ขยับเมื่อไหร่วิเคราะห์ต่อ</div>`;
+        return;
+    }
+
+    // ความเร็วที่ตั้งไว้ — หุ่นส่งมาเองในช่อง target_speed_fraction (0.3 / 0.5 / 1.0)
+    // เทียบค่าคลาดเคลื่อนกับค่าปกติ "ของความเร็วนั้น" กฎของหนัก/ฝืดจึงใช้ได้ทุกความเร็ว
+    const D    = PARAMS.diagnosis;
+    const frac = Number(p.target_speed_fraction);
+    const pct  = Number.isFinite(frac) && frac > 0 ? frac * 100 : null;
+    const base = pct != null ? baseErrFor(pct) : HP_BASE_ERR;
+    const devs = hpEma.err.map((v, i) => (v / base[i] - 1) * 100);
     const maxDev = Math.max(...devs), minDev = Math.min(...devs);
     const top = devs.indexOf(maxDev);
     const sorted = [...devs].sort((a, b) => b - a);
     const gap = sorted[0] - sorted[1];          // ข้อที่เบี่ยงสุดโดดกว่าอันดับสองเท่าไหร่
+    const sg = v => { const r = Math.round(v) || 0; return (r > 0 ? '+' : '') + r + '%'; };
+    const speedLine = pct == null ? null
+        : `ความเร็วที่ตั้ง ${pct.toFixed(0)}% (ปกติ ${D.normal_speed_pct}%) — เทียบกับค่าปกติของความเร็วนี้`;
 
     const force = Number(p.tcp_force_scalar);
     const pred  = state.lastPrediction;
@@ -2771,28 +2807,39 @@ function renderDiagnosis(p, temps) {
 
     let verdict, level, why = [];
 
-    if (minDev > 25) {
-        verdict = 'เดินเร็วกว่าปกติ'; level = 'warn';
-        why.push(`ทุกข้อเบี่ยงขึ้นพร้อมกัน +${minDev.toFixed(0)}% ถึง +${maxDev.toFixed(0)}%`);
-        why.push('ขึ้นยกแผงแบบนี้คือความเร็วรวม ไม่ใช่ข้อใดข้อหนึ่งเสีย');
-    } else if (maxDev < -15) {
-        verdict = 'เดินช้ากว่าปกติ'; level = 'warn';
-        why.push(`ทุกข้อเบี่ยงลงพร้อมกัน ${maxDev.toFixed(0)}% ถึง ${minDev.toFixed(0)}%`);
-        why.push('ลงยกแผงแบบนี้คือความเร็วรวม ไม่ใช่ความเสียหาย');
-    } else if (top === 4 && maxDev > 20 && gap > 12) {
+    // กฎความผิดปกติรายข้อมาก่อน — ใช้ค่าที่เทียบตามความเร็วแล้ว จึงไม่ถูกความเร็วกลบ
+    if (top === 4 && maxDev > RULES.payload_j5_above && gap > RULES.payload_gap) {
         verdict = 'น้ำหนักบรรทุกเกิน'; level = 'bad';
-        why.push(`J5 เบี่ยง +${maxDev.toFixed(0)}% โดดกว่าข้ออื่น ${gap.toFixed(0)}%`);
+        why.push(`J5 เบี่ยง ${sg(maxDev)} โดดกว่าข้ออื่น ${gap.toFixed(0)}%`);
         why.push('J5 คือข้อมือที่รับโมเมนต์จากของที่ถือโดยตรง ยิ่งหนักยิ่งเบี่ยง');
-    } else if (top === 0 && maxDev > 12 && gap > 8) {
+        if (speedLine) why.push(speedLine);
+    } else if (top === 0 && maxDev > RULES.friction_j1_above && gap > RULES.friction_gap) {
         verdict = 'แรงเสียดทานที่ฐาน'; level = 'bad';
-        why.push(`J1 เบี่ยง +${maxDev.toFixed(0)}% โดดกว่าข้ออื่น ${gap.toFixed(0)}%`);
+        why.push(`J1 เบี่ยง ${sg(maxDev)} โดดกว่าข้ออื่น ${gap.toFixed(0)}%`);
         why.push('J1 คือข้อหมุนฐาน เบี่ยงเดี่ยวแปลว่าฝืดที่ฐาน');
+        if (speedLine) why.push(speedLine);
+    } else if (pct != null && Math.abs(pct - D.normal_speed_pct) > D.speed_tol_pct) {
+        // หุ่นบอกความเร็วที่ตั้งมาเอง — ไม่ต้องเดาจากค่าคลาดเคลื่อน
+        verdict = pct > D.normal_speed_pct ? 'เดินเร็วกว่าปกติ' : 'เดินช้ากว่าปกติ'; level = 'warn';
+        why.push(`ตั้งความเร็วไว้ ${pct.toFixed(0)}% (ปกติ ${D.normal_speed_pct}%) — หุ่นรายงานเอง`);
+        why.push(`เทียบกับค่าปกติของ ${pct.toFixed(0)}% ทุกข้อเบี่ยง ${sg(minDev)} ถึง ${sg(maxDev)}`
+               + ' — ข้อต่อทำงานปกติ');
+    } else if (pct == null && minDev > RULES.fast_all_above) {
+        // ข้อมูลไม่มีช่องความเร็ว — เดาจากรูปแบบการเบี่ยงแบบเดิม
+        verdict = 'เดินเร็วกว่าปกติ'; level = 'warn';
+        why.push(`ทุกข้อเบี่ยงขึ้นพร้อมกัน ${sg(minDev)} ถึง ${sg(maxDev)}`);
+        why.push('ขึ้นยกแผงแบบนี้คือความเร็วรวม ไม่ใช่ข้อใดข้อหนึ่งเสีย');
+    } else if (pct == null && maxDev < RULES.slow_all_below) {
+        verdict = 'เดินช้ากว่าปกติ'; level = 'warn';
+        why.push(`ทุกข้อเบี่ยงลงพร้อมกัน ${sg(maxDev)} ถึง ${sg(minDev)}`);
+        why.push('ลงยกแผงแบบนี้คือความเร็วรวม ไม่ใช่ความเสียหาย');
     } else if (Number.isFinite(force) && force >= HP_BANDS.force.bad) {
         verdict = 'แรงสูงผิดปกติ'; level = 'bad';
         why.push('แต่รูปแบบการเบี่ยงรายข้อไม่ชัดพอจะระบุตำแหน่ง');
     } else {
         verdict = 'ทำงานปกติ'; level = 'ok';
-        why.push(`ทุกข้อเบี่ยงอยู่ในช่วง ${minDev.toFixed(0)}% ถึง +${maxDev.toFixed(0)}%`);
+        why.push(`ทุกข้อเบี่ยงอยู่ในช่วง ${sg(minDev)} ถึง ${sg(maxDev)}`);
+        if (speedLine) why.push(speedLine);
     }
 
     if (Number.isFinite(force)) {
@@ -2859,27 +2906,49 @@ function renderDiagnosis(p, temps) {
 //   กระแสหุ่น    p50 0.77  p95 0.89  p99 0.94
 //   คลาดเคลื่อน  p50 184   p95 401   p99 495   µrad
 //   อุณหภูมิ     สูงสุดที่เคยวัดได้ 45.75 ตลอด 8 วันทำงาน จึงเตือนที่ 46
-const HP_BANDS = {
-    force:   { warn: 1.69, bad: 2.19 },
-    current: { warn: 0.89, bad: 0.94 },
-    err:     { warn: 401,  bad: 495  },
-    temp:    { warn: 46,   bad: 50   },
-};
+const HP_BANDS = PARAMS.diagnosis.bands;          // params.json → diagnosis.bands
+// เกณฑ์วินิจฉัย (+25% ทุกข้อ = เร็ว ฯลฯ) — params.json → diagnosis.rules
+const RULES = PARAMS.diagnosis.rules;
 let hpLast = 0;
 
 // ── ค่าฐานรายข้อจาก run ที่ติดป้าย normal (ค่าเฉลี่ยทั้ง run) ──
 // คลาดเคลื่อนตำแหน่ง หน่วย µrad — ใช้เทียบว่าข้อไหนเบี่ยงผิดปกติ
-const HP_BASE_ERR = [88, 71, 130, 94, 30, 83];
+const HP_BASE_ERR = PARAMS.diagnosis.base_err_urad;
 // ตัวกรอง EMA: รอบ pick-place ยาว ~11 วิ ต้องเฉลี่ยข้ามรอบไม่งั้นแท่งกระพริบตามจังหวะแขน
-// alpha 0.0007 ที่ 125 Hz ≈ ค่าคงที่เวลา 12 วินาที
-const HP_ALPHA = 0.0007;
-const hpEma = { err: null, n: 0 };
+// alpha ไม่ได้เก็บไว้ คำนวณ = 1 ÷ (ema_sec × hz) → 1 ÷ (11.4 × 125) ≈ 0.0007
+// แก้ hz หรือ ema_sec ใน params.json แล้ว alpha เปลี่ยนตามเอง
+const HP_ALPHA = 1 / (PARAMS.diagnosis.ema_sec * PARAMS.sampling.hz);
+const hpEma = { err: null, n: 0, lastMove: 0, stopped: false };
+
+// ── baseErrFor — ค่าคลาดเคลื่อนปกติของความเร็วที่ตั้ง ──
+// วัดจริงที่ 30 / 50 / 100% (params.json → diagnosis.base_err_by_speed) ค่าระหว่างกลางลากเส้นตรง
+const BASE_BY_SPEED = Object.entries(PARAMS.diagnosis.base_err_by_speed)
+    .filter(([k]) => k !== '_')
+    .map(([k, v]) => [Number(k), v])
+    .sort((a, b) => a[0] - b[0]);
+function baseErrFor(pct) {
+    const S = BASE_BY_SPEED;
+    if (pct <= S[0][0]) return S[0][1];
+    if (pct >= S[S.length - 1][0]) return S[S.length - 1][1];
+    const i = S.findIndex(([p]) => p >= pct);
+    const [p0, a] = S[i - 1], [p1, b] = S[i];
+    const w = (pct - p0) / (p1 - p0);
+    return a.map((x, j) => x + (b[j] - x) * w);
+}
 
 function renderHealthPanel(p) {
     if (!p || typeof p !== 'object' || !Array.isArray(p.joint_temperatures)) return;
 
+    // ── หุ่นขยับอยู่ไหม — ข้อไหนหมุนเร็วกว่า moving_deg_s ถือว่าขยับ ──
+    // หยุดนิ่งเกิน stopped_after_sec (เช่นเล่นจบ) พักตัวกรองไว้
+    // ไม่งั้นค่าคลาดเคลื่อนตอนหยุดเกือบเป็นศูนย์ ค่าเฉลี่ยจะตกจนดูเหมือน "เดินช้า"
+    // payload ไม่มี actual_qd ให้ถือว่าขยับตลอด (ทำงานแบบเดิม)
+    const qdDeg = Array.isArray(p.actual_qd) ? p.actual_qd.map(v => Math.abs(Number(v)) * 180 / Math.PI) : null;
+    if (!qdDeg || qdDeg.some(v => v > PARAMS.diagnosis.moving_deg_s)) hpEma.lastMove = performance.now();
+    hpEma.stopped = performance.now() - hpEma.lastMove > PARAMS.diagnosis.stopped_after_sec * 1000;
+
     // ── อัปเดตตัวกรองทุกข้อความ (125 Hz) แม้จะยังไม่ถึงรอบวาดจอ ──
-    if (Array.isArray(p.actual_q) && Array.isArray(p.target_q)) {
+    if (!hpEma.stopped && Array.isArray(p.actual_q) && Array.isArray(p.target_q)) {
         const e = p.actual_q.map((v, i) => Math.abs(Number(v) - Number(p.target_q[i])) * 1e6);
         if (e.every(Number.isFinite)) {
             hpEma.err = hpEma.err === null
@@ -2936,6 +3005,222 @@ function renderHealthPanel(p) {
 
     renderDiagnosis(p, temps);
 }
+
+// ============================================================
+// ALERTS — เตือนมุม · ความเร็ว · อุณหภูมิ + ค่าที่หาได้ระหว่างทำงาน
+//
+// มุม/ความเร็ว: เทียบสเปก UR3 และช่วงที่งานนี้ใช้ปกติ       (params.json → joint_limits)
+// อุณหภูมิ:     เทียบเกณฑ์ UR · เพดานตามสมการ · อัตราขึ้นที่สมการคาด (params.json → temp_alerts)
+// ค่าที่หาได้:  ช่วงมุมที่ใช้ · หมุนสะสม · เร็วสุด · เวลาที่จะถึงเส้นเตือน
+// ============================================================
+const JL  = PARAMS.joint_limits;
+const TA  = PARAMS.temp_alerts;
+const DEG = 180 / Math.PI;
+
+// สถิติสะสมตั้งแต่เริ่มรอบ — ล้างใหม่ทุกครั้งที่ replay เริ่ม (onReplayStatus)
+const al = { last: 0 };
+function resetAlertStats() {
+    Object.assign(al, {
+        prevQ: null,                 // มุมแถวก่อน ใช้รวมหมุนสะสม
+        min: null, max: null,        // ช่วงมุมที่เห็น (องศา)
+        rot: [0, 0, 0, 0, 0, 0],     // หมุนสะสม (rad)
+        peak: [0, 0, 0, 0, 0, 0],    // เร็วสุดที่เห็น (องศา/วิ)
+        tHist: [],                   // [เวลา(วิ), อุณหภูมิ 6 ข้อ] เก็บวินาทีละจุด ไว้หาอัตราขึ้น
+    });
+}
+resetAlertStats();
+
+// อุณหภูมิห้องจากช่องกรอก — อ่านเฉยๆ ไม่เขียนกลับ (fcNum เขียนกลับ จะทับตอนผู้ใช้กำลังพิมพ์)
+function readAmbient() {
+    const v = parseFloat(document.getElementById('fc-amb')?.value);
+    return Number.isFinite(v) ? v : FORECAST_CAL.ambientRef;
+}
+
+// ── updateAlerts — เรียกทุกข้อความ telemetry (125 Hz) วาดจอ 5 ครั้ง/วิ ──
+function updateAlerts(p) {
+    if (!p || !Array.isArray(p.actual_q)) return;
+    const q = p.actual_q.map(Number);
+    if (!q.every(Number.isFinite)) return;
+    // โหมดเร่งเวลา: เฟรมข้ามมาหลายแถว หมุนสะสมกับอัตราขึ้นของอุณหภูมิคำนวณไม่ได้
+    const ff = Number(p.ff) > 1;
+
+    const deg = q.map(v => v * DEG);
+    al.min = al.min ? al.min.map((m, i) => Math.min(m, deg[i])) : deg.slice();
+    al.max = al.max ? al.max.map((m, i) => Math.max(m, deg[i])) : deg.slice();
+    if (al.prevQ && !ff) q.forEach((v, i) => { al.rot[i] += Math.abs(v - al.prevQ[i]); });
+    al.prevQ = q;
+
+    // ความเร็วเป็นค่าที่หุ่นวัดเอง ใช้ได้แม้ตอนเร่งเวลา
+    const qd = Array.isArray(p.actual_qd) ? p.actual_qd.map(v => Math.abs(Number(v)) * DEG) : null;
+    qd?.forEach((v, i) => { if (Number.isFinite(v) && v > al.peak[i]) al.peak[i] = v; });
+
+    const temps = Array.isArray(p.joint_temperatures) ? p.joint_temperatures.map(Number) : null;
+    const t = Number.isFinite(Number(p.timestamp)) ? Number(p.timestamp) : Date.now() / 1000;
+    if (temps && !ff) {
+        const lastT = al.tHist.length ? al.tHist[al.tHist.length - 1][0] : -Infinity;
+        if (t < lastT) al.tHist = [];                  // เวลาย้อน = replay เปลี่ยน run
+        if (t - lastT >= 1) al.tHist.push([t, temps]);
+        while (al.tHist.length && t - al.tHist[0][0] > TA.rate_window_sec) al.tHist.shift();
+    }
+
+    const now = performance.now();
+    if (now - al.last < 200) return;
+    al.last = now;
+    renderAlerts(deg, qd, temps, ff);
+}
+
+function renderAlerts(deg, qd, temps, ff) {
+    const box = document.getElementById('alert-panel');
+    if (!box) return;
+    box.classList.remove('hidden');
+    const out = [];                                    // { lv: 'warn' | 'bad', msg }
+
+    // ── มุม: ขีดจำกัดกลไก (สเปก UR3) และช่วงที่งานนี้ใช้ปกติ ──
+    deg.forEach((d, i) => {
+        const J = `J${i + 1}`, mech = JL.mech_deg[i];
+        if (mech != null) {
+            const left = mech - Math.abs(d);
+            if (left < 0)
+                out.push({ lv: 'bad', msg: `${J} ${d.toFixed(0)}° เกินขีดจำกัดกลไก ±${mech}°` });
+            else if (left < JL.mech_margin_deg)
+                out.push({ lv: 'warn', msg: `${J} ใกล้ขีดจำกัดกลไก เหลือ ${left.toFixed(0)}°` });
+        }
+        const lo = JL.work_min_deg?.[i], hi = JL.work_max_deg?.[i];
+        if (lo != null && hi != null
+            && (d < lo - JL.work_margin_deg || d > hi + JL.work_margin_deg))
+            out.push({ lv: 'warn', msg: `${J} ${d.toFixed(0)}° นอกช่วงที่งานนี้ใช้ปกติ (${lo}° ถึง ${hi}°)` });
+    });
+
+    // ── ความเร็ว: สเปก UR3 ──
+    qd?.forEach((v, i) => {
+        const max = JL.speed_max_deg_s[i];
+        if (!Number.isFinite(v)) return;
+        if (v > max)
+            out.push({ lv: 'bad', msg: `J${i + 1} เร็ว ${v.toFixed(0)}°/วิ เกินสเปก ${max}°/วิ` });
+        else if (v > max * JL.speed_warn_frac)
+            out.push({ lv: 'warn', msg: `J${i + 1} เร็ว ${v.toFixed(0)}°/วิ ใกล้สเปก ${max}°/วิ` });
+    });
+
+    // ── อุณหภูมิ ──
+    const W = UR_LIMITS.temp_warn_c, S = UR_LIMITS.temp_shutdown_c, amb = readAmbient();
+    let eta = null;
+    if (temps) {
+        temps.forEach((T, i) => {
+            if (!Number.isFinite(T)) return;
+            const J = `J${i + 1}`;
+            const tInf = amb + FORECAST_CAL.riseC[i], tau = FORECAST_CAL.tauMin[i];
+            if (T >= S)      out.push({ lv: 'bad', msg: `${J} ${T.toFixed(1)}°C ถึงเกณฑ์ตัดการทำงานของ UR (${S}°C)` });
+            else if (T >= W) out.push({ lv: 'bad', msg: `${J} ${T.toFixed(1)}°C เกินเกณฑ์เตือนของ UR (${W}°C)` });
+            // ภาระปกติร้อนได้ไม่เกินเพดาน ถ้าเกินแปลว่ามีอะไรทำให้ร้อนผิดปกติ
+            if (T > tInf + TA.ceiling_margin_c)
+                out.push({ lv: 'warn', msg: `${J} ${T.toFixed(1)}°C เกินเพดานที่ควรเป็น ${tInf.toFixed(1)}°C` });
+            // เวลาที่จะถึงเส้นเตือนถ้าทำงานแบบนี้ต่อ: แก้สมการ T(t) = W หา t
+            if (T < W && tInf > W) {
+                const m = -tau * Math.log((tInf - W) / (tInf - T));
+                if (!eta || m < eta.min) eta = { joint: i + 1, min: m };
+            }
+        });
+
+        // อัตราขึ้นจริงย้อนหลัง เทียบกับอัตราที่สมการคาด (เพดาน − ตอนนี้) ÷ τ
+        if (!ff && al.tHist.length >= 2) {
+            const [t0, A] = al.tHist[0], [t1, B] = al.tHist[al.tHist.length - 1];
+            const dtMin = (t1 - t0) / 60;
+            if (dtMin >= TA.rate_window_sec / 60 * 0.8) {
+                B.forEach((T, i) => {
+                    const rate = (T - A[i]) / dtMin;
+                    const tInf = amb + FORECAST_CAL.riseC[i];
+                    const expect = Math.max(0, (tInf - T) / FORECAST_CAL.tauMin[i]);
+                    if (rate > expect + TA.rate_margin_c_per_min)
+                        out.push({ lv: 'warn', msg: `J${i + 1} ร้อนขึ้น ${rate.toFixed(2)}°C/นาที `
+                                                  + `เร็วกว่าที่ควร ${expect.toFixed(2)}°C/นาที` });
+                });
+            }
+        }
+    }
+
+    // ── วาด ──
+    const lv = out.some(a => a.lv === 'bad') ? 'bad' : out.length ? 'warn' : 'ok';
+    const head = document.getElementById('al-head');
+    head.className = 'diag-head diag-' + lv;
+    head.textContent = lv === 'ok' ? '✓ อยู่ในเกณฑ์ปกติ' : `⚠ ${out.length} คำเตือน`;
+
+    // เกินเส้นเตือนไปแล้วไม่ต้องบอกเวลาที่จะถึง — มีบรรทัดเตือนสีแดงอยู่แล้ว
+    const over = temps?.some(T => T >= W);
+    const etaLine = !temps || over ? ''
+        : eta ? `J${eta.joint} จะถึง ${W}°C ในอีก ~${fmtDur(eta.min)} ถ้าทำงานแบบนี้ต่อ`
+              : `ไม่มีข้อไหนจะถึง ${W}°C — เพดานทุกข้อต่ำกว่า (ห้อง ${amb}°C)`;
+    document.getElementById('al-list').innerHTML =
+          out.map(a => `<div class="al-line al-${a.lv}">${a.msg}</div>`).join('')
+        + (etaLine ? `<div class="diag-line">${etaLine}</div>` : '')
+        + (ff ? '<div class="diag-line">เร่งเวลาอยู่ — ไม่นับหมุนสะสมและอัตราขึ้นของอุณหภูมิ</div>' : '');
+
+    // ตารางค่าที่หาได้รายข้อ
+    const rev = r => (r / (2 * Math.PI)).toFixed(1);
+    document.getElementById('al-joints').innerHTML =
+        '<div class="al-row al-th"><span></span><span>ตอนนี้</span><span>ช่วงที่ใช้</span>'
+      + '<span>หมุนสะสม</span><span>เร็วสุด</span></div>'
+      + deg.map((d, i) => `<div class="al-row"><span>J${i + 1}</span>`
+          + `<span>${d.toFixed(0)}°</span>`
+          + `<span>${al.min[i].toFixed(0)}…${al.max[i].toFixed(0)}°</span>`
+          + `<span>${rev(al.rot[i])} รอบ</span>`
+          + `<span>${al.peak[i].toFixed(0)}°/วิ</span></div>`).join('');
+}
+
+// ── ประวัติอุณหภูมิรายวัน — ดึงจากตาราง daily_health ที่ logger สรุปไว้ทุกชั่วโมง ──
+// raw_messages ถูกลบเมื่อเกิน 7 วัน แต่ค่าสรุปรายวันเก็บถาวร ใช้ดูแนวโน้มการเสื่อม
+async function showDailyHealth() {
+    const box = document.getElementById('al-daily');
+    box.innerHTML = '<div class="diag-line">กำลังโหลด…</div>';
+    try {
+        const r = await fetch(`${API_BASE}/api/health/daily?days=30`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const rows = await r.json();
+        if (!rows.length) {
+            box.innerHTML = '<div class="diag-line">ยังไม่มีข้อมูลสรุป — logger สรุปทุกชั่วโมง</div>';
+            return;
+        }
+        // รวมแถวรายข้อเป็นรายวัน: ข้อที่ร้อนสุด · ร้อนขึ้นเหนือค่าต่ำสุดของวัน (แทนอุณหภูมิห้อง)
+        const days = new Map();
+        for (const x of rows) {
+            const k = `${x.day}|${x.source}`;
+            if (!days.has(k)) days.set(k, []);
+            days.get(k).push(x);
+        }
+        box.innerHTML =
+            '<div class="al-row al-day al-th"><span>วัน</span><span>ที่มา</span>'
+          + '<span>ร้อนสุด</span><span>ขึ้นเหนือห้อง</span><span>นาที</span></div>'
+          + [...days.values()].map(js => {
+                const hot = js.reduce((a, b) => (b.temp_max > a.temp_max ? b : a));
+                const cold = Math.min(...js.map(j => j.temp_min));
+                return `<div class="al-row al-day"><span>${hot.day.slice(5)}</span>`
+                     + `<span>${hot.source === 'live' ? 'หุ่นจริง' : 'replay'}</span>`
+                     + `<span>J${hot.joint} ${hot.temp_max.toFixed(1)}°</span>`
+                     + `<span>+${(hot.temp_max - cold).toFixed(1)}°</span>`
+                     + `<span>${hot.minutes}</span></div>`;
+            }).join('');
+    } catch (e) {
+        box.innerHTML = `<div class="diag-line">โหลดไม่ได้: ${e.message} — เช็คว่า dt-api ทำงานอยู่</div>`;
+    }
+}
+// กดครั้งแรกเปิด กดอีกครั้งปิด — ช่องว่างแล้ว CSS (.al-grid:empty) ซ่อนให้เอง
+document.getElementById('al-daily-btn')?.addEventListener('click', () => {
+    const box = document.getElementById('al-daily');
+    const btn = document.getElementById('al-daily-btn');
+    if (box.innerHTML) {
+        box.innerHTML = '';
+        btn.textContent = 'ประวัติอุณหภูมิรายวัน';
+    } else {
+        btn.textContent = 'ซ่อนประวัติ';
+        showDailyHealth();
+    }
+});
+
+// ── คลิกหัวแผง (FORECAST / ALERTS / DIAGNOSIS ...) เพื่อพับเก็บ ──
+// จอเล็กแผงจะได้ไม่บังแขน 3D — คลิกอีกครั้งกางกลับ
+document.addEventListener('click', (e) => {
+    const label = e.target.closest('.panel-col .hp-label, .panel-col .ai-label');
+    if (label) label.parentElement.classList.toggle('collapsed');
+});
 
 // ── renderAIPanel — แสดงผลทำนายสดจากโมเดล ──
 // payload: { prediction, confidence, true_label, probs:{...} }
@@ -3105,6 +3390,7 @@ function connectMQTT() {
         applyTimelapse(payload);
         recordNetStats(payload);
         renderHealthPanel(payload);
+        updateAlerts(payload);
 
         let matched = 0;
         for (const joint of state.joints) {

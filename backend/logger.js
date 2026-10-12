@@ -21,6 +21,67 @@ const LOG_TOPICS  = list(process.env.LOG_TOPICS) .length ? list(process.env.LOG_
 // ตั้งผ่าน env จะได้ไม่ผูกชื่อ field ของหุ่นรุ่นใดไว้ในโค้ด
 const DROP_FIELDS = list(process.env.DROP_FIELDS);
 
+// ============================================================
+// สรุปสุขภาพรายวัน — daily_health
+//
+// raw_messages ถูกลบเมื่อเกิน RETENTION_DAYS แต่ค่าสรุปรายวันเก็บถาวร
+// ใช้ดูแนวโน้มการเสื่อมระยะยาว (ร้อนขึ้นเหนือห้องมากขึ้นทีละน้อยข้ามสัปดาห์ = เริ่มเสื่อม)
+// วันละ 6 แถวต่อที่มา เก็บ 10 ปียังไม่ถึง 50,000 แถว
+// source แยก replay (ข้อมูลเพื่อนเล่นซ้ำ มีช่อง true_label) ออกจากหุ่นจริง ไม่ให้ปนกัน
+// ============================================================
+const HEALTH_TOPIC = process.env.HEALTH_TOPIC || 'ur/telemetry';
+const REPORT_TZ    = process.env.REPORT_TZ    || 'Asia/Bangkok';   // วันตามเวลาไทย
+
+async function ensureDailyTable(db) {
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS daily_health (
+            day         DATE     NOT NULL,
+            source      TEXT     NOT NULL,           -- 'live' หรือ 'replay'
+            joint       SMALLINT NOT NULL,           -- 1-6
+            samples     INTEGER  NOT NULL,
+            minutes     INTEGER  NOT NULL,           -- นาทีที่มีข้อมูล = เวลาทำงานโดยประมาณ
+            temp_min    REAL, temp_max REAL, temp_avg REAL,
+            current_avg REAL,
+            updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (day, source, joint)
+        )`);
+}
+
+// since = null → สรุปทุกวันที่ยังมีใน raw_messages (ตอนเริ่ม) · ปกติสรุปเมื่อวาน + วันนี้
+async function summarizeDaily(db, since) {
+    const r = await db.query(`
+        WITH s AS (
+            SELECT ts, (ts AT TIME ZONE $2)::date AS day,
+                   CASE WHEN payload ? 'true_label' THEN 'replay' ELSE 'live' END AS source,
+                   payload
+            FROM raw_messages
+            WHERE topic = $1
+              AND payload ? 'joint_temperatures'
+              AND ($3::timestamptz IS NULL OR ts >= $3)
+        ), x AS (
+            SELECT ts, day, source, j AS joint,
+                   (payload->'joint_temperatures'->>(j - 1))::real  AS temp,
+                   abs((payload->'actual_current'->>(j - 1))::real) AS cur
+            FROM s, generate_series(1, 6) AS j
+        )
+        INSERT INTO daily_health
+            (day, source, joint, samples, minutes, temp_min, temp_max, temp_avg, current_avg)
+        SELECT day, source, joint, count(*), count(DISTINCT date_trunc('minute', ts)),
+               min(temp), max(temp), avg(temp), avg(cur)
+        FROM x WHERE temp IS NOT NULL
+        GROUP BY day, source, joint
+        ON CONFLICT (day, source, joint) DO UPDATE SET
+            samples = EXCLUDED.samples,   minutes  = EXCLUDED.minutes,
+            temp_min = EXCLUDED.temp_min, temp_max = EXCLUDED.temp_max,
+            temp_avg = EXCLUDED.temp_avg, current_avg = EXCLUDED.current_avg,
+            updated_at = NOW()`,
+        [HEALTH_TOPIC, REPORT_TZ, since]);
+    return r.rowCount;
+}
+
+// ย้อน 48 ชม. ครอบทั้งเมื่อวานและวันนี้ตามเวลาไทยเสมอ — สรุปซ้ำทุกชั่วโมง ข้ามเที่ยงคืนแล้วไม่ตกหล่น
+const sinceYesterday = () => new Date(Date.now() - 2 * 86_400_000);
+
 export function startLogger(db) {
     const minGapMs  = 1000 / LOG_HZ;
     const lastSaved = new Map();          // topic → เวลาที่เก็บล่าสุด (หรี่ความถี่แยกต่อ topic)
@@ -80,6 +141,11 @@ export function startLogger(db) {
     // ── ลบข้อมูลเก่าทุก 1 ชั่วโมง ──
     // ไม่งั้นข้อมูลโตไม่หยุดจนดิสก์เต็ม
     const purge = async () => {
+        // สรุปรายวันก่อนลบ — ข้อมูลดิบหายแต่ค่าสรุปยังอยู่
+        try {
+            const n = await summarizeDaily(db, sinceYesterday());
+            if (n) console.log(`[LOG] สรุปรายวัน ${n} แถว`);
+        } catch (e) { console.error('[LOG] summarize error:', e.message); }
         try {
             const r = await db.query(
                 'DELETE FROM raw_messages WHERE ts < NOW() - make_interval(days => $1)',
@@ -88,6 +154,10 @@ export function startLogger(db) {
             if (r.rowCount) console.log(`[LOG] ลบข้อมูลเก่า ${r.rowCount} แถว`);
         } catch (e) { console.error('[LOG] purge error:', e.message); }
     };
-    purge();
-    setInterval(purge, 3_600_000);
+    // สร้างตาราง → สรุปย้อนหลังทุกวันที่ยังเหลือ → ค่อยเริ่มลบ (ลบก่อนจะสรุปไม่ทัน)
+    ensureDailyTable(db)
+        .then(() => summarizeDaily(db, null))
+        .then(n => console.log(`[LOG] สรุปรายวันย้อนหลัง ${n} แถว`))
+        .catch(e => console.error('[LOG] daily_health error:', e.message))
+        .finally(() => { purge(); setInterval(purge, 3_600_000); });
 }

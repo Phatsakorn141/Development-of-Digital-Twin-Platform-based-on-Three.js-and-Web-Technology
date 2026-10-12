@@ -1349,12 +1349,57 @@ html, body {
 .db-warn { background: #d29922; }
 .db-bad  { background: #f85149; }
 
+/* ===== Alerts — เตือนมุม ความเร็ว อุณหภูมิ (ส่วนล่างของแผง FORECAST) ===== */
+#alert-panel {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+#alert-panel.hidden { display: none; }
+.al-line { line-height: 1.5; padding-left: 10px; text-indent: -10px; }
+.al-line::before { content: '● '; font-size: 8px; }
+.al-warn { color: #d29922; }
+.al-bad  { color: #f85149; }
+.al-grid { display: grid; gap: 2px; margin-top: 8px; }
+.al-grid:empty { display: none; }
+.al-row  { display: grid; grid-template-columns: 22px 38px 1fr 58px 52px; gap: 4px;
+           font-size: 10px; color: var(--text-muted); text-align: right; }
+.al-row span:first-child { text-align: left; }
+.al-row.al-day { grid-template-columns: 40px 46px 1fr 70px 34px; }
+.al-th   { opacity: .7; border-bottom: 1px solid rgba(255, 255, 255, .08); padding-bottom: 2px; }
+#al-daily-btn { margin-top: 8px; width: 100%; padding: 4px; font-size: 11px; cursor: pointer; }
+
+/* ===== คอลัมน์แผงลอย — เรียงแผงต่อกันแนวตั้ง ไม่ให้ทับกัน ===== */
+/* เดิมแต่ละแผงกำหนดตำแหน่งเอง (top / bottom) พอผลยาวขึ้นก็ชนกัน */
+.panel-col {
+    position: absolute;
+    top: 12px;
+    max-height: calc(100% - 56px);   /* เว้นแถบล่าง (vertices · net-stats) */
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    z-index: 5;
+}
+.panel-col.left  { left: 12px; }
+.panel-col.right { right: 12px; align-items: flex-end; }
+/* อยู่ในคอลัมน์แล้วให้ไหลตามลำดับ ไม่ใช้ตำแหน่งเดิมของแต่ละแผง */
+.panel-col > div { position: static !important; flex: none; max-height: none !important; }
+
+/* ── คลิกหัวแผงเพื่อพับ/กาง ── */
+.panel-col .hp-label, .panel-col .ai-label { cursor: pointer; user-select: none; }
+.panel-col .hp-label::after, .panel-col .ai-label::after { content: ' ▾'; opacity: .6; }
+.panel-col .collapsed > .hp-label::after,
+.panel-col .collapsed > .ai-label::after { content: ' ▸'; }
+.panel-col .collapsed > :not(.hp-label):not(.ai-label) { display: none !important; }
+.panel-col .collapsed > .hp-label { margin-bottom: 0; }
+
 /* ===== Forecast — ตั้งพารามิเตอร์แล้วทำนาย ===== */
 #fc-panel {
     position: absolute;
     top: 12px;
     left: 12px;
-    width: 268px;
+    width: 300px;          /* กว้างพอให้ตาราง ALERTS */
     padding: 10px 12px;
     background: rgba(15, 17, 23, 0.86);
     backdrop-filter: blur(8px);

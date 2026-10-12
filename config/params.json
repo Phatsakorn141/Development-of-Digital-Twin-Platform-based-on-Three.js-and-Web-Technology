@@ -1,0 +1,124 @@
+{
+  "_": "พารามิเตอร์กลางของแพลตฟอร์ม — แก้ที่นี่ที่เดียว เว็บ (app.js) และ Python (ai/params.py) อ่านไฟล์นี้ร่วมกัน ค่าที่คำนวณจากค่าอื่นได้จะไม่เก็บซ้ำ โปรแกรมคำนวณเอง",
+  "version": 1,
+
+  "sampling": {
+    "_": "hz เป็นตัวตั้งต้น — window, stride, ความถี่เฟรมโหมดเร่ง และตัวกรอง EMA คำนวณจาก hz ทั้งหมด",
+    "hz": 125,
+    "window_sec": 1.0,
+    "predict_per_sec": 5,
+    "_locked": "window_sec ต้องเป็น 1.0 — โมเดลเพื่อนเทรนจากหน้าต่าง 125 แถว = 1 วินาที เปลี่ยนแล้วต้องเทรนใหม่"
+  },
+
+  "mqtt": {
+    "broker": "localhost",
+    "port": 1883,
+    "topic_telemetry": "ur/telemetry",
+    "topic_prediction": "ur/prediction",
+    "topic_session": "ur/session",
+    "topic_command": "ur/command",
+    "topic_status": "ur/replay_status"
+  },
+
+  "db": {
+    "_": "ฐานข้อมูลหุ่นจริงของเพื่อน (container friend226)",
+    "host": "localhost",
+    "port": 5433,
+    "name": "ur_anomaly",
+    "user": "ur_admin",
+    "password": "password"
+  },
+
+  "ai": {
+    "_": "model_dir นับจากโฟลเดอร์โปรเจกต์ · vote = โหวตจากคำทายกี่ครั้งล่าสุด · min_episode_sec = เหตุการณ์สั้นกว่านี้ไม่นับ",
+    "model_dir": "Model_RF_v2",
+    "vote": 15,
+    "min_episode_sec": 3,
+    "report_sec": 300
+  },
+
+  "measured": {
+    "_": "วัดจากข้อมูลหุ่นจริง 2.45 ล้านแถว ไม่รวม long_run (ตัวนั้นคือ 31 รอบต่อกัน) · หมุนต่อชั่วโมงไม่ได้เก็บไว้ คำนวณ = rot_rad_per_cycle ÷ run_sec × 3600",
+    "speeds": [
+      { "pct": 30,  "runs": 20, "run_sec": 138.7, "rot_rad_per_cycle": 59.46, "i_rms": 1.741 },
+      { "pct": 50,  "runs": 45, "run_sec": 86.9,  "rot_rad_per_cycle": 58.82, "i_rms": 1.736 },
+      { "pct": 100, "runs": 20, "run_sec": 47.5,  "rot_rad_per_cycle": 58.85, "i_rms": 1.736 }
+    ]
+  },
+
+  "thermal": {
+    "_": "tau ฟิตจาก long_run (RMSE 0.008-0.013 C) · rise_c = ร้อนขึ้นเหนือห้องจนสมดุล เฉลี่ยจากวันเครื่องเย็น 20 และ 26 พ.ค. · เพดานรายข้อ = อุณหภูมิห้อง + rise_c (คำนวณเอง)",
+    "tau_min": [34.3, 46.9, 41.1, 32.6, 36.6, 32.9],
+    "rise_c":  [10.1, 12.6, 15.7, 18.6, 20.9, 21.2],
+    "ambient_ref_c": 24.2
+  },
+
+  "ur_limits": {
+    "_": "Universal Robots support: joint safety processor บันทึกคำเตือนที่ 50 C · ตัดการทำงานที่ 85 C (อุณหภูมิภายในข้อ)",
+    "temp_warn_c": 50,
+    "temp_shutdown_c": 85
+  },
+
+  "joint_limits": {
+    "_": "สเปก UR3 (Technical details): ข้อ 1-5 หมุนได้ ±360° ข้อ 6 ไม่จำกัด (null) · ความเร็วสูงสุด 180°/s ข้อ 1-3 และ 360°/s ข้อ 4-6 · work_* = ช่วงที่งานนี้ใช้ปกติ (null = ไม่เตือนนอกช่วง)",
+    "mech_deg": [360, 360, 360, 360, 360, null],
+    "mech_margin_deg": 10,
+    "speed_max_deg_s": [180, 180, 180, 360, 360, 360],
+    "speed_warn_frac": 0.9,
+    "work_min_deg": null,
+    "work_max_deg": null,
+    "work_margin_deg": 5
+  },
+
+  "temp_alerts": {
+    "_": "ceiling_margin_c: ร้อนเกินเพดาน (ห้อง + rise_c) เท่านี้ = เกินที่ภาระปกติอธิบายได้ · อัตราขึ้นวัดย้อนหลัง rate_window_sec เทียบกับที่สมการคาด (เพดาน − ตอนนี้) ÷ τ เร็วเกินไป rate_margin_c_per_min ขึ้นเตือน",
+    "ceiling_margin_c": 1.0,
+    "rate_window_sec": 60,
+    "rate_margin_c_per_min": 0.3
+  },
+
+  "timelapse": {
+    "_": "ตัวคูณ = เวลาที่ขอ ÷ watch_sec (คำนวณเอง) · filler = รอบที่เล่นวนเมื่อข้อมูลต่อเนื่องจริงหมด ต้องเก็บ 125 Hz",
+    "watch_sec": 120,
+    "filler": { "30": "speed_30_001", "50": "cold_start_d3_001", "100": "speed_100_001" }
+  },
+
+  "forecast_inputs": {
+    "_": "ช่วงค่าที่ยอมรับของช่องกรอกบนหน้าเว็บ — กรอกเกินจะถูกบีบให้อยู่ในช่วง",
+    "fc-speed": { "min": 10, "max": 100, "def": 50 },
+    "fc-hr":    { "min": 0,  "max": 999, "def": 2 },
+    "fc-min":   { "min": 0,  "max": 999, "def": 0 },
+    "fc-amb":   { "min": 5,  "max": 45,  "def": 24.2 }
+  },
+
+  "diagnosis": {
+    "_": "base_err_urad = ค่าคลาดเคลื่อนปกติรายข้อ · ema_sec = เฉลี่ยย้อนหลังกี่วินาที (alpha คำนวณ = 1 ÷ (ema_sec × hz)) · bands = percentile 95/99 ของ run ปกติ",
+    "base_err_urad": [88, 71, 130, 94, 30, 83],
+    "base_err_by_speed": {
+      "_": "ค่าคลาดเคลื่อนเฉลี่ยรายข้อ (µrad) ของ run แต่ละความเร็ว — แผงวินิจฉัยเทียบกับค่าของความเร็วที่ตั้งอยู่ เดินเร็วจึงไม่ถูกนับเป็นข้อผิดปกติ",
+      "30":  [61, 54, 93, 64, 25, 56],
+      "50":  [87, 70, 128, 93, 31, 82],
+      "100": [147, 104, 217, 163, 38, 140]
+    },
+    "normal_speed_pct": 50,
+    "speed_tol_pct": 5,
+    "moving_deg_s": 1,
+    "stopped_after_sec": 3,
+    "ema_sec": 11.4,
+    "bands": {
+      "force":   { "warn": 1.69, "bad": 2.19 },
+      "current": { "warn": 0.89, "bad": 0.94 },
+      "err":     { "warn": 401,  "bad": 495 },
+      "temp":    { "warn": 46,   "bad": 50 }
+    },
+    "rules": {
+      "_": "เกณฑ์ตั้งจากรูปแบบที่เห็นในข้อมูลเพื่อน ยังไม่ได้ทดสอบกับทุก run · หน่วย % เบี่ยงจาก base_err_urad",
+      "fast_all_above": 25,
+      "slow_all_below": -15,
+      "payload_j5_above": 20,
+      "payload_gap": 12,
+      "friction_j1_above": 12,
+      "friction_gap": 8
+    }
+  }
+}

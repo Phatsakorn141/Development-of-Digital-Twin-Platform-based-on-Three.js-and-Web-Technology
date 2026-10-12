@@ -168,6 +168,24 @@ app.post('/api/projects', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── สรุปสุขภาพรายวัน — อุณหภูมิ/กระแสรายข้อ ไม่ถูกลบตาม RETENTION_DAYS ──
+// logger สรุปให้ทุกชั่วโมง (logger.js → daily_health)
+app.get('/api/health/daily', async (req, res) => {
+    const days = Math.min(3650, Math.max(1, Number(req.query.days) || 30));
+    try {
+        const r = await db.query(`
+            SELECT to_char(day, 'YYYY-MM-DD') AS day, source, joint, samples, minutes,
+                   temp_min, temp_max, temp_avg, current_avg
+            FROM daily_health
+            WHERE day >= CURRENT_DATE - $1::int
+            ORDER BY day DESC, source, joint`, [days]);
+        res.json(r.rows);
+    } catch (e) {
+        if (e.code === '42P01') return res.json([]);    // ตารางยังไม่ถูกสร้าง = ยังไม่มีข้อมูล
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.listen(PORT, () => console.log(`[API] listening on :${PORT}`));
 
 // เริ่มเก็บข้อมูลหลัง API พร้อมแล้ว

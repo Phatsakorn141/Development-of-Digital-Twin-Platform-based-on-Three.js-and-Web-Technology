@@ -22,14 +22,11 @@ import scipy.stats as st
 import onnxruntime as ort
 import paho.mqtt.client as mqtt
 
-BROKER, PORT = "localhost", 1883
-TOPIC_IN   = "ur/telemetry"
-TOPIC_OUT  = "ur/prediction"
-TOPIC_SESS = "ur/session"
-
-WINDOW = 125      # 1 วินาที @ 125 Hz — ตามที่โมเดลเพื่อนกำหนด
-STRIDE = 25       # ทายทุก 25 แถว = 5 ครั้ง/วินาที
-MODEL  = "../Model_RF_v2"   # 8 คลาส (payload_normal ถูกยุบเข้า normal) — ตัวเก่า 9 คลาสอยู่ที่ ../Model_RF
+# ── ค่าทั้งหมดมาจาก config/params.json (อ่านผ่าน params.py) ──
+# WINDOW = hz × window_sec = 125 แถว · STRIDE = hz ÷ predict_per_sec = 25 แถว — คำนวณใน params.py
+from params import (BROKER, PORT, WINDOW, STRIDE, MODEL, VOTE, MIN_EPISODE_SEC, REPORT_SEC,
+                    TOPIC_TELEMETRY as TOPIC_IN, TOPIC_PREDICTION as TOPIC_OUT,
+                    TOPIC_SESSION as TOPIC_SESS)
 
 CLASSES   = json.load(open(f"{MODEL}/classes.json"))
 SC        = np.load(f"{MODEL}/scaler.npz")
@@ -211,11 +208,11 @@ def main():
     ap = argparse.ArgumentParser(description="ทำนาย anomaly จาก MQTT พร้อมสรุปผลสะสม")
     ap.add_argument("--minutes",  type=float, default=0,
                     help="รันกี่นาทีแล้วหยุดสรุปอัตโนมัติ (0 = ไม่จำกัด)")
-    ap.add_argument("--report",   type=float, default=300,
+    ap.add_argument("--report",   type=float, default=REPORT_SEC,
                     help="พิมพ์สรุประหว่างทางทุกกี่วินาที")
-    ap.add_argument("--vote",     type=int,   default=15,
+    ap.add_argument("--vote",     type=int,   default=VOTE,
                     help="โหวตจากคำทำนายกี่ครั้งติดกัน (15 ≈ 3 วินาที)")
-    ap.add_argument("--min-sec",  type=float, default=3,
+    ap.add_argument("--min-sec",  type=float, default=MIN_EPISODE_SEC,
                     help="ช่วงที่สั้นกว่านี้ถือเป็นสัญญาณรบกวน")
     ap.add_argument("--quiet",    action="store_true", help="ไม่พิมพ์ทีละคำทำนาย")
     ap.add_argument("--save",     default="", help="บันทึกสรุปเป็นไฟล์ JSON")
