@@ -2629,7 +2629,7 @@ function onReplayStatus(s) {
 
     if (s.state === 'start') {
         state.iAcc = { sum: 0, n: 0 };
-        resetAlertStats();                   // เริ่มรอบใหม่ ล้างช่วงมุม/หมุนสะสม/เร็วสุด
+        resetAlertStats();                   // เริ่มรอบใหม่ ล้างช่วงมุม/เร็วสุด
         hpEma.err = null; hpEma.n = 0;       // ล้างค่าเฉลี่ยวินิจฉัย ไม่ให้ค่ารอบก่อนค้างมา
         bar.classList.remove('hidden');
         bar.firstElementChild.style.width = '0%';
@@ -3011,7 +3011,7 @@ function renderHealthPanel(p) {
 //
 // มุม/ความเร็ว: เทียบสเปก UR3 และช่วงที่งานนี้ใช้ปกติ       (params.json → joint_limits)
 // อุณหภูมิ:     เทียบเกณฑ์ UR · เพดานตามสมการ · อัตราขึ้นที่สมการคาด (params.json → temp_alerts)
-// ค่าที่หาได้:  ช่วงมุมที่ใช้ · หมุนสะสม · เร็วสุด · เวลาที่จะถึงเส้นเตือน
+// ค่าที่หาได้:  ช่วงมุมที่ใช้ · เร็วสุด · เวลาที่จะถึงเส้นเตือน
 // ============================================================
 const JL  = PARAMS.joint_limits;
 const TA  = PARAMS.temp_alerts;
@@ -3021,9 +3021,7 @@ const DEG = 180 / Math.PI;
 const al = { last: 0 };
 function resetAlertStats() {
     Object.assign(al, {
-        prevQ: null,                 // มุมแถวก่อน ใช้รวมหมุนสะสม
         min: null, max: null,        // ช่วงมุมที่เห็น (องศา)
-        rot: [0, 0, 0, 0, 0, 0],     // หมุนสะสม (rad)
         peak: [0, 0, 0, 0, 0, 0],    // เร็วสุดที่เห็น (องศา/วิ)
         tHist: [],                   // [เวลา(วิ), อุณหภูมิ 6 ข้อ] เก็บวินาทีละจุด ไว้หาอัตราขึ้น
     });
@@ -3041,14 +3039,12 @@ function updateAlerts(p) {
     if (!p || !Array.isArray(p.actual_q)) return;
     const q = p.actual_q.map(Number);
     if (!q.every(Number.isFinite)) return;
-    // โหมดเร่งเวลา: เฟรมข้ามมาหลายแถว หมุนสะสมกับอัตราขึ้นของอุณหภูมิคำนวณไม่ได้
+    // โหมดเร่งเวลา: เฟรมข้ามมาหลายแถว อัตราขึ้นของอุณหภูมิคำนวณไม่ได้
     const ff = Number(p.ff) > 1;
 
     const deg = q.map(v => v * DEG);
     al.min = al.min ? al.min.map((m, i) => Math.min(m, deg[i])) : deg.slice();
     al.max = al.max ? al.max.map((m, i) => Math.max(m, deg[i])) : deg.slice();
-    if (al.prevQ && !ff) q.forEach((v, i) => { al.rot[i] += Math.abs(v - al.prevQ[i]); });
-    al.prevQ = q;
 
     // ความเร็วเป็นค่าที่หุ่นวัดเอง ใช้ได้แม้ตอนเร่งเวลา
     const qd = Array.isArray(p.actual_qd) ? p.actual_qd.map(v => Math.abs(Number(v)) * DEG) : null;
@@ -3152,68 +3148,20 @@ function renderAlerts(deg, qd, temps, ff) {
     document.getElementById('al-list').innerHTML =
           out.map(a => `<div class="al-line al-${a.lv}">${a.msg}</div>`).join('')
         + (etaLine ? `<div class="diag-line">${etaLine}</div>` : '')
-        + (ff ? '<div class="diag-line">เร่งเวลาอยู่ — ไม่นับหมุนสะสมและอัตราขึ้นของอุณหภูมิ</div>' : '');
+        + (ff ? '<div class="diag-line">เร่งเวลาอยู่ — ไม่นับอัตราขึ้นของอุณหภูมิ</div>' : '');
 
     // ตารางค่าที่หาได้รายข้อ
-    const rev = r => (r / (2 * Math.PI)).toFixed(1);
     document.getElementById('al-joints').innerHTML =
         '<div class="al-row al-th"><span></span><span>ตอนนี้</span><span>ช่วงที่ใช้</span>'
-      + '<span>หมุนสะสม</span><span>เร็วสุด</span></div>'
+      + '<span>เร็วสุด</span></div>'
       + deg.map((d, i) => `<div class="al-row"><span>J${i + 1}</span>`
           + `<span>${d.toFixed(0)}°</span>`
           + `<span>${al.min[i].toFixed(0)}…${al.max[i].toFixed(0)}°</span>`
-          + `<span>${rev(al.rot[i])} รอบ</span>`
           + `<span>${al.peak[i].toFixed(0)}°/วิ</span></div>`).join('');
 }
 
-// ── ประวัติอุณหภูมิรายวัน — ดึงจากตาราง daily_health ที่ logger สรุปไว้ทุกชั่วโมง ──
-// raw_messages ถูกลบเมื่อเกิน 7 วัน แต่ค่าสรุปรายวันเก็บถาวร ใช้ดูแนวโน้มการเสื่อม
-async function showDailyHealth() {
-    const box = document.getElementById('al-daily');
-    box.innerHTML = '<div class="diag-line">กำลังโหลด…</div>';
-    try {
-        const r = await fetch(`${API_BASE}/api/health/daily?days=30`);
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const rows = await r.json();
-        if (!rows.length) {
-            box.innerHTML = '<div class="diag-line">ยังไม่มีข้อมูลสรุป — logger สรุปทุกชั่วโมง</div>';
-            return;
-        }
-        // รวมแถวรายข้อเป็นรายวัน: ข้อที่ร้อนสุด · ร้อนขึ้นเหนือค่าต่ำสุดของวัน (แทนอุณหภูมิห้อง)
-        const days = new Map();
-        for (const x of rows) {
-            const k = `${x.day}|${x.source}`;
-            if (!days.has(k)) days.set(k, []);
-            days.get(k).push(x);
-        }
-        box.innerHTML =
-            '<div class="al-row al-day al-th"><span>วัน</span><span>ที่มา</span>'
-          + '<span>ร้อนสุด</span><span>ขึ้นเหนือห้อง</span><span>นาที</span></div>'
-          + [...days.values()].map(js => {
-                const hot = js.reduce((a, b) => (b.temp_max > a.temp_max ? b : a));
-                const cold = Math.min(...js.map(j => j.temp_min));
-                return `<div class="al-row al-day"><span>${hot.day.slice(5)}</span>`
-                     + `<span>${hot.source === 'live' ? 'หุ่นจริง' : 'replay'}</span>`
-                     + `<span>J${hot.joint} ${hot.temp_max.toFixed(1)}°</span>`
-                     + `<span>+${(hot.temp_max - cold).toFixed(1)}°</span>`
-                     + `<span>${hot.minutes}</span></div>`;
-            }).join('');
-    } catch (e) {
-        box.innerHTML = `<div class="diag-line">โหลดไม่ได้: ${e.message} — เช็คว่า dt-api ทำงานอยู่</div>`;
-    }
-}
-// กดครั้งแรกเปิด กดอีกครั้งปิด — ช่องว่างแล้ว CSS (.al-grid:empty) ซ่อนให้เอง
-document.getElementById('al-daily-btn')?.addEventListener('click', () => {
-    const box = document.getElementById('al-daily');
-    const btn = document.getElementById('al-daily-btn');
-    if (box.innerHTML) {
-        box.innerHTML = '';
-        btn.textContent = 'ประวัติอุณหภูมิรายวัน';
-    } else {
-        btn.textContent = 'ซ่อนประวัติ';
-        showDailyHealth();
-    }
-});
+// ประวัติอุณหภูมิรายวันถอดออกจากหน้าเว็บไว้ก่อน (ข้อมูลตอนนี้เป็น replay ทั้งหมด ยังไม่ใช่สุขภาพหุ่นจริง)
+// backend ยังสรุปลงตาราง daily_health ทุกชั่วโมง ดูได้ที่ GET /api/health/daily
 
 // ── คลิกหัวแผง (FORECAST / ALERTS / DIAGNOSIS ...) เพื่อพับเก็บ ──
 // จอเล็กแผงจะได้ไม่บังแขน 3D — คลิกอีกครั้งกางกลับ
