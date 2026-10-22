@@ -1,9 +1,19 @@
 <!DOCTYPE html>
+<!-- ============================================================
+     index.html — โครงหน้าเว็บ Digital Twin (HTML อย่างเดียว ไม่มีการคำนวณ)
+     หน้าตาอยู่ใน styles.css · การทำงานทั้งหมดอยู่ใน app.js
+     id ของ element ในไฟล์นี้ถูกอ้างใน app.js (ตัวแปร dom) — เปลี่ยนชื่อ id ต้องแก้ทั้งสองที่
+     โครงหลัก:  header (โลโก้ · แถบเครื่องมือ · ปุ่ม MQTT/โมเดล)
+                main   (แผงซ้าย Node Tree · ภาพ 3D ตรงกลาง + แผงลอย · แผงขวา Control)
+                modal  (หน้าต่างสร้าง/แก้ joint · กล่องเปิด project จาก server)
+     ============================================================ -->
 <html lang="en">
 <head>
+    <!-- ตัวอักษร UTF-8 (แสดงภาษาไทยได้) · viewport ให้ย่อขยายตามจอ -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Digital Twin - Industrial Machine Controller</title>
+    <!-- สไตล์ของเว็บ + ฟอนต์ Inter + ชุดไอคอน Material Icons Round จาก Google -->
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -14,33 +24,52 @@
 <body>
     <!-- Header -->
     <header id="app-header">
+        <!-- ซ้าย: โลโก้และชื่อ -->
         <div class="header-left">
             <span class="material-icons-round logo-icon">hub</span>
             <h1>Digital Twin</h1>
             <span class="header-badge">Prototype</span>
         </div>
+        <!-- กลาง: แถบเครื่องมือจัดฉาก (ซ่อนจนกว่าจะมีโมเดล) -->
         <div class="header-center">
-            <div id="sim-controls" class="sim-controls hidden">
-                <button id="btn-sim-toggle" class="btn btn-sim" title="Start Simulation">
-                    <span class="material-icons-round">play_arrow</span>
+            <!-- เครื่องมือจัดฉาก — คลิกโมเดลในฉากเพื่อเลือก แล้วลากลูกศรเพื่อย้าย/หมุน/ย่อขยาย -->
+            <!-- ปุ่มโหมด 3 ปุ่มมี data-mode ให้ app.js รู้ว่าเป็นโหมดไหน (initSceneTools) -->
+            <div id="scene-tools" class="sim-controls scene-tools hidden">
+                <div class="tool-group">
+                    <button class="tool-btn" data-mode="translate" title="ย้าย (W)">
+                        <span class="material-icons-round">open_with</span>
+                    </button>
+                    <button class="tool-btn" data-mode="rotate" title="หมุนรอบแกนตั้ง (E)">
+                        <span class="material-icons-round">rotate_right</span>
+                    </button>
+                    <button class="tool-btn" data-mode="scale" title="ย่อ/ขยาย (R)">
+                        <span class="material-icons-round">open_in_full</span>
+                    </button>
+                </div>
+                <span class="tool-sep"></span>
+                <!-- ปุ่มจับระยะ -->
+                <button id="tool-snap" class="tool-btn" title="จับระยะทีละ 5 ซม. / 15° (S)">
+                    <span class="material-icons-round">grid_4x4</span>
                 </button>
-                <div class="sim-speed">
-                    <label>Speed</label>
-                    <input type="range" id="sim-speed-slider" min="0.1" max="5" step="0.1" value="1">
-                    <span id="sim-speed-val">1.0x</span>
-                </div>
-                <div class="sim-status" id="sim-status">
-                    <span class="sim-dot"></span>
-                    Idle
-                </div>
+                <span class="tool-sep"></span>
+                <!-- ชื่อโมเดลที่เลือกอยู่ (app.js เขียนทับใน updateToolUI) -->
+                <div id="tool-target" class="tool-target">คลิกโมเดลในฉากเพื่อเลือก</div>
             </div>
         </div>
+        <!-- ขวา: ปุ่ม MQTT · เพิ่มโมเดล · Upload -->
         <div class="header-right">
             <!-- MQTT toggle button — เปิด/ปิด panel กรอก broker -->
             <button id="btn-mqtt-toggle" class="btn btn-secondary" title="MQTT Connection">
                 <span class="material-icons-round">sensors</span>
                 MQTT
             </button>
+            <!-- เพิ่มโมเดลเข้าฉากเดิม — กดแล้ว app.js ไปคลิก input file ที่ซ่อนอยู่ข้างล่าง -->
+            <button id="btn-add-model" class="btn btn-secondary" title="เพิ่มโมเดลเข้าฉากเดิม ไม่ลบของเก่า">
+                <span class="material-icons-round">add_box</span>
+                เพิ่มโมเดล
+            </button>
+            <input type="file" id="add-file-input" accept=".gltf,.glb" hidden>
+            <!-- Upload = เปิดโมเดลแทนทั้งฉาก -->
             <button id="btn-upload" class="btn btn-primary">
                 <span class="material-icons-round">upload_file</span>
                 Upload GLTF / GLB
@@ -68,18 +97,22 @@
                        class="mqtt-input-sm"
                        placeholder="Password">
             </div>
+            <!-- Discover ติ๊กไว้ = subscribe "#" ฟังทุก topic (ใช้สำรวจว่ามีข้อมูลอะไร) -->
             <label class="mqtt-discover" title="ฟังทุก topic (#) เพื่อดูว่ามีข้อมูลอะไรเข้ามาบ้าง">
                 <input type="checkbox" id="mqtt-discover" checked>
                 Discover
             </label>
+            <!-- ปุ่ม Connect/Disconnect (ข้อความสลับใน app.js) -->
             <button id="btn-mqtt-connect" class="btn btn-secondary">
                 <span class="material-icons-round">link</span>Connect
             </button>
+            <!-- Pause = ยังรับข้อมูล แต่ไม่ขยับโมเดล (ไว้ลาก slider ตอน Calibrate) -->
             <button id="btn-mqtt-pause" class="btn btn-secondary"
                     title="หยุด apply ข้อมูลชั่วคราว เพื่อลาก slider ตอน Calibrate">
                 <span class="material-icons-round">pause</span>Pause
             </button>
-            
+
+            <!-- จุดสี + ข้อความสถานะการเชื่อมต่อ (updateMQTTStatus) -->
             <div id="mqtt-status" class="mqtt-status">
                 <span class="sim-dot"></span>Disconnected
             </div>
@@ -87,13 +120,21 @@
     </header>
 
     <main id="app-main">
-        <!-- Left Panel: Node Tree -->
+        <!-- Left Panel: Node Tree (หุบไปทางซ้ายได้ด้วยปุ่ม ❮) -->
         <aside id="panel-left" class="panel">
             <div class="panel-header">
                 <span class="material-icons-round">account_tree</span>
                 <h2>Node Tree</h2>
+                <!-- "N selected" — จำนวน node ที่ติ๊กไว้ (app.js ใช้ตัวนี้ เพราะ getElementById ได้ตัวแรก) -->
                 <span class="selection-count hidden" id="selection-count">0 selected</span>
+                <!-- ปุ่มหุบ/กางแผง -->
+                <button id="btn-toggle-left" class="btn-icon panel-toggle" title="ซ่อน Node Tree">
+                    <span class="material-icons-round">chevron_left</span>
+                </button>
             </div>
+            <!-- โมเดลในฉาก — ตำแหน่ง · หมุน · ขนาด แยกรายโมเดล -->
+            <div id="scene-list" class="scene-list hidden"></div>
+            <!-- ต้นไม้ node ของทุกโมเดล (renderNodeTree เขียนทับ) -->
             <div id="node-tree-container" class="panel-body">
                 <div class="empty-state">
                     <span class="material-icons-round">cloud_upload</span>
@@ -104,12 +145,15 @@
 
         <!-- Center: 3D Viewport -->
         <section id="viewport-container">
+            <!-- Three.js วาดภาพ 3D ลง canvas นี้ -->
             <canvas id="three-canvas"></canvas>
+            <!-- ข้อความตอนยังไม่มีโมเดล (ซ่อนเมื่อมีโมเดล) -->
             <div id="viewport-overlay" class="empty-state">
                 <span class="material-icons-round">view_in_ar</span>
                 <h3>No Model Loaded</h3>
                 <p>Upload a GLTF or GLB file to begin</p>
             </div>
+            <!-- มุมซ้ายล่าง: จำนวน vertex / mesh / node (updateStats) -->
             <div id="viewport-info">
                 <span id="info-vertices">0 vertices</span>
                 <span id="info-meshes">0 meshes</span>
@@ -119,14 +163,16 @@
             <div id="net-stats"><span>ไม่ได้เชื่อมต่อ</span></div>
             <!-- แผงลอยฝั่งซ้าย — เรียงต่อกันแนวตั้ง ไม่ทับกัน · คลิกหัวแผงเพื่อพับ -->
             <div class="panel-col left">
-                <!-- ตั้งพารามิเตอร์แล้วให้ระบบทำนาย — วัดจริง 1 รอบ อนุมานด้วยสมการความร้อน -->
+                <!-- ตั้งพารามิเตอร์แล้วให้ระบบทำนาย — กดปุ่มแล้ว replay.py เล่นข้อมูลจริงแบบเร่งเวลา -->
                 <div id="fc-panel">
                     <div class="hp-label">FORECAST</div>
+                    <!-- ช่องกรอกเป็น text — app.js บีบค่าให้อยู่ในช่วงเอง (fcNum ตาม params.json → forecast_inputs) -->
                     <div class="fc-row">
                         <label for="fc-speed">ความเร็ว (%)</label>
                         <input type="text" id="fc-speed" inputmode="decimal"
                                value="50" placeholder="10-100">
                     </div>
+                    <!-- เวลาเดินต่อเนื่อง ชม. + นาที -->
                     <div class="fc-row">
                         <label>เดินต่อเนื่อง</label>
                         <div class="fc-time">
@@ -139,14 +185,17 @@
                         <input type="text" id="fc-amb" inputmode="decimal"
                                value="24.2" placeholder="5-45">
                     </div>
+                    <!-- แผน: กี่รอบ · ดูจบในกี่วินาที · เร่งกี่เท่า (renderPlan) -->
                     <div id="fc-plan" class="fc-plan"></div>
                     <button id="fc-go">เริ่มวิเคราะห์</button>
+                    <!-- แถบความคืบหน้า + ผลลัพธ์ -->
                     <div id="fc-bar" class="fc-bar hidden"><i></i></div>
                     <div id="fc-out"></div>
                     <!-- เตือนมุม ความเร็ว อุณหภูมิ + ค่าที่หาได้ระหว่างทำงาน — อยู่ในแผงเดียวกับ FORECAST -->
                     <!-- คลิกคำว่า ALERTS เพื่อพับเฉพาะส่วนนี้ -->
                     <div id="alert-panel" class="hidden">
                         <div class="hp-label">ALERTS</div>
+                        <!-- หัว: ✓ ปกติ / ⚠ N คำเตือน · รายการคำเตือน · ตารางรายข้อ -->
                         <div id="al-head" class="diag-head">—</div>
                         <div id="al-list"></div>
                         <div id="al-joints" class="al-grid"></div>
@@ -156,6 +205,7 @@
             <!-- แผงลอยฝั่งขวา -->
             <div class="panel-col right">
                 <!-- ผลทำนายสดจากโมเดล AI — มาทาง topic ur/prediction ที่ predict_mqtt.py ส่ง -->
+                <!-- ⚠ ตอนนี้ app.js ไม่ได้ส่ง ur/prediction มาที่แผงนี้ แผงจึงซ่อนอยู่ตลอด (ดู renderAIPanel) -->
                 <div id="ai-panel" class="hidden">
                     <div class="ai-label">AI PREDICTION</div>
                     <div class="ai-main">
@@ -168,6 +218,7 @@
                 <!-- สถานะกายภาพสด — คำนวณในเบราว์เซอร์จาก ur/telemetry ตรงๆ -->
                 <div id="health-panel" class="hidden">
                     <div class="hp-label">SENSOR STATUS</div>
+                    <!-- แรง · กระแส · คลาดเคลื่อน · ข้อที่ร้อนสุด / อุณหภูมิ J1–J6 -->
                     <div id="hp-rows"></div>
                     <div id="hp-temps" class="hp-temps"></div>
                 </div>
@@ -185,6 +236,7 @@
             <div class="panel-header">
                 <span class="material-icons-round">precision_manufacturing</span>
                 <h2>Control</h2>
+                <!-- ปุ่มไฟล์ project: Import .dtwp · Export .dtwp · เปิดจาก server · บันทึกขึ้น server -->
                 <button id="btn-import-project" class="btn btn-icon" title="Import Project (.dtwp)">
                     <span class="material-icons-round">upload_file</span>
                 </button>
@@ -199,7 +251,7 @@
                 </button>
                 <input type="file" id="project-file-input" accept=".dtwp,.json" style="display:none">
             </div>
-            <!-- Tab Row -->
+            <!-- Tab Row — data-tab = id ของเนื้อหาแท็บที่จะแสดง (switchTab) -->
             <div class="panel-tabs-row">
                 <button class="tab-btn active" data-tab="tab-joints">
                     <span class="material-icons-round">settings</span>Joints
@@ -215,12 +267,15 @@
             <!-- Joints Tab -->
             <div id="tab-joints" class="tab-content">
                 <div class="tab-toolbar">
+                    <!-- ⚠ id ซ้ำกับ selection-count ในแผงซ้าย — app.js ใช้แค่ตัวแรก ตัวนี้จึงไม่อัปเดต -->
                     <span class="selection-count hidden" id="selection-count">0 selected</span>
                     <div style="flex:1"></div>
+                    <!-- ปุ่ม + สร้าง joint (กดได้เมื่อติ๊ก node ใน Node Tree แล้ว) -->
                     <button id="btn-add-joint" class="btn btn-icon" title="Add Joint (select nodes first)" disabled>
                         <span class="material-icons-round">add_circle</span>
                     </button>
                 </div>
+                <!-- การ์ด joint (renderJoints เขียนทับ) -->
                 <div id="joints-container" class="panel-body">
                     <div class="empty-state">
                         <span class="material-icons-round">precision_manufacturing</span>
@@ -238,6 +293,7 @@
                         <span class="material-icons-round">bookmark_add</span>Save State
                     </button>
                 </div>
+                <!-- การ์ด preset (renderPresets เขียนทับ) -->
                 <div id="presets-container" class="panel-body">
                     <div class="empty-state">
                         <span class="material-icons-round">bookmark_border</span>
@@ -248,6 +304,7 @@
 
             <!-- Animation Tab -->
             <div id="tab-animation" class="tab-content hidden">
+                <!-- เพิ่ม keyframe · ติ๊ก Loop · ปุ่มเล่น/หยุด -->
                 <div class="tab-toolbar anim-toolbar">
                     <button id="btn-add-keyframe" class="btn btn-secondary btn-sm" disabled>
                         <span class="material-icons-round">add_circle</span>Add Keyframe
@@ -260,7 +317,9 @@
                         <span class="material-icons-round">play_arrow</span>
                     </button>
                 </div>
+                <!-- เวลาที่เล่นไป / ความยาวทั้งหมด -->
                 <div class="anim-timecode" id="anim-timecode">0.00s / 0.00s</div>
+                <!-- รายการ keyframe (renderKeyframes เขียนทับ) -->
                 <div id="animation-container" class="panel-body">
                     <div class="empty-state">
                         <span class="material-icons-round">movie</span>
@@ -271,7 +330,7 @@
         </aside>
     </main>
 
-    <!-- Add Joint Modal -->
+    <!-- Add Joint Modal — หน้าต่างสร้าง/แก้ joint (หัวข้อกับปุ่มสลับเป็น Edit ใน openEditJointModal) -->
     <div id="modal-overlay" class="modal-overlay hidden">
         <div class="modal">
             <div class="modal-header">
@@ -281,14 +340,17 @@
                 </button>
             </div>
             <div class="modal-body">
+                <!-- ชื่อ joint -->
                 <div class="form-group">
                     <label for="joint-name">Joint Name</label>
                     <input type="text" id="joint-name" placeholder="e.g. Base Rotation, Elbow, Wrist">
                 </div>
+                <!-- node ที่ผูก (แสดงเป็น chip) -->
                 <div class="form-group">
                     <label>Linked Nodes</label>
                     <div id="modal-linked-nodes" class="linked-nodes-list"></div>
                 </div>
+                <!-- จุดหมุน — แสดงเฉพาะเมื่อเลือกหลาย node -->
                 <div class="form-group" id="pivot-group">
                     <label for="joint-pivot-node">
                         <span class="material-icons-round" style="font-size:14px;vertical-align:middle;">my_location</span>
@@ -299,6 +361,7 @@
                     </select>
                     <span class="form-hint">The node whose position is used as the rotation/translation center</span>
                 </div>
+                <!-- ชนิด joint -->
                 <div class="form-group">
                     <label for="joint-type">Joint Type</label>
                     <select id="joint-type">
@@ -312,6 +375,7 @@
                         </optgroup>
                     </select>
                 </div>
+                <!-- ตั้งค่า coupled (แสดงเมื่อเลือกชนิด Coupled) -->
                 <div class="form-group" id="coupled-group" style="display:none;flex-direction:column;gap:8px">
                     <label for="joint-coupled-target">ผูกกับ Joint ต้นทาง</label>
                     <select id="joint-coupled-target"></select>
@@ -319,6 +383,7 @@
                     <input type="number" id="joint-coupled-ratio" value="1" step="0.1">
                     <span class="form-hint">ratio = 2 → หมุน 2 เท่า, -1 → หมุนทิศตรงข้าม</span>
                 </div>
+                <!-- ค่าที่ joint คุม: หมุนรอบแกนไหน / เลื่อนแกนไหน / ซ่อน-แสดง -->
                 <div class="form-group">
                     <label for="joint-property">Control Property</label>
                     <select id="joint-property">
@@ -337,6 +402,7 @@
                         </optgroup>
                     </select>
                 </div>
+                <!-- ขอบเขต slider: ต่ำสุด · สูงสุด · ขยับทีละเท่าไหร่ -->
                 <div class="form-row">
                     <div class="form-group">
                         <label for="joint-min">Min</label>
@@ -353,6 +419,7 @@
                 </div>
 
                 <!-- ── Realtime binding: ผูก joint กับข้อมูลที่เข้ามาทาง MQTT ── -->
+                <!-- Payload Inspector: แสดงค่าล่าสุดของทุก topic คลิกแถวไหนกรอก Topic/Path ให้ -->
                    <div class="form-group">
                     <label>
                         <span class="material-icons-round" style="font-size:14px;vertical-align:middle;">radar</span>
@@ -360,6 +427,7 @@
                     </label>
                     <div id="payload-inspector" class="payload-inspector"></div>
                 </div>
+                <!-- topic ที่ joint นี้ฟัง (UR3 = ur/telemetry) -->
                 <div class="form-group">
                     <label for="joint-src-topic">
                         <span class="material-icons-round" style="font-size:14px;vertical-align:middle;">sensors</span>
@@ -368,10 +436,12 @@
                     <input type="text" id="joint-src-topic" placeholder="เช่น ur3/joint_states (เว้นว่าง = ไม่รับค่าจาก MQTT)">
                     <span class="form-hint">รองรับ wildcard + และ #</span>
                 </div>
+                <!-- ตำแหน่งค่าใน payload (UR3 = actual_q[0] ถึง actual_q[5]) -->
                                 <div class="form-group">
                     <label for="joint-src-path">Payload Path</label>
                     <input type="text" id="joint-src-path" placeholder="เช่น actual_q[0] หรือ data.j1 (เว้นว่าง = payload เป็นตัวเลขเดี่ยว)">
                 </div>
+                <!-- หน่วยของค่า (ใช้แสดงผล เช่น rad → แสดงองศาให้ด้วย) -->
                 <div class="form-group">
                     <label for="joint-unit">
                         <span class="material-icons-round" style="font-size:14px;vertical-align:middle;">straighten</span>
@@ -390,6 +460,7 @@
                     </select>
                     <span class="form-hint">ยึดหน่วย SI เป็นหน่วยกลาง — ใช้ Scale แปลงจากหน่วยของอุปกรณ์มาที่นี่</span>
                 </div>
+                <!-- การแปลงค่า: ค่าในโมเดล = ค่าดิบ × Scale (กลับทิศถ้า Invert) + Offset -->
                 <div class="form-row">
                     <div class="form-group">
                         <label for="joint-scale">Scale</label>
@@ -405,6 +476,7 @@
                     </div>
                 </div>
 
+                <!-- สัญญาณจำลอง (ใช้กับ simulation — ปุ่มเล่นบนหัวเว็บถูกแทนด้วยแถบเครื่องมือแล้ว) -->
                 <div class="form-group">
                     <label for="joint-sim-pattern">Sensor Simulation Pattern</label>
                     <select id="joint-sim-pattern">
@@ -416,11 +488,13 @@
                         <option value="random">Random Noise</option>
                     </select>
                 </div>
+                <!-- ความยาว 1 รอบของสัญญาณจำลอง (ซ่อนเมื่อเลือก None) -->
                 <div class="form-group" id="sim-freq-group">
                     <label for="joint-sim-freq">Cycle Period (seconds)</label>
                     <input type="number" id="joint-sim-freq" value="3" step="0.1" min="0.5" max="30">
                 </div>
             </div>
+            <!-- ปุ่มยกเลิก / ยืนยัน (ข้อความสลับเป็น Save Changes ตอนแก้) -->
             <div class="modal-footer">
                 <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
                 <button id="modal-confirm" class="btn btn-primary">
@@ -430,7 +504,7 @@
             </div>
         </div>
     </div>
-    <!-- กล่องเลือก project จาก server -->
+    <!-- กล่องเลือก project จาก server (openServerDialog เติมรายการ) -->
     <div id="server-overlay" class="modal-overlay hidden">
         <div class="modal" style="max-width:520px">
             <div class="modal-header">
@@ -445,6 +519,8 @@
         </div>
     </div>
     <!-- Scripts -->
+    <!-- importmap บอกเบราว์เซอร์ว่า import 'three' ใน app.js ให้โหลดจาก CDN (three.js เวอร์ชัน 0.160.0) -->
+    <!-- app.js โหลดแบบ module (ใช้ import / top-level await ได้) -->
     <script type="importmap">
     {
         "imports": {

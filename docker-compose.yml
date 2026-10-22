@@ -4,7 +4,7 @@ services:
     container_name: dt-mqtt
     restart: unless-stopped
     ports:
-      - "1883:1883"   # TCP        — bridge.py ใช้
+      - "1883:1883"   # TCP        — สคริปต์ Python ใช้ (ur3_publisher.py, replay.py, predict_mqtt.py)
       - "9001:9001"   # WebSocket  — เบราว์เซอร์ใช้
     volumes:
       # Mosquitto 2.x ไม่เปิด listener ใดๆ ถ้าไม่มี config
@@ -43,9 +43,11 @@ services:
       PORT:         3001
       # ── ตั้งค่าการเก็บข้อมูล ──
       LOG_TOPICS:     "#"                              # ฟังทุก topic
-      LOG_HZ:         "10"                              # เก็บ 5 ครั้ง/วินาที (เว็บยังได้ 10 Hz)
+      LOG_HZ:         "10"                              # เก็บลง DB 10 ครั้ง/วินาทีต่อ topic (เว็บยังได้ครบ 125 Hz)
       RETENTION_DAYS: "7"                              # ลบข้อมูลเกิน 7 วัน
-      DROP_FIELDS:    "target_q,track_err,tcp_force"   # ค่าซ้ำและค่าศูนย์ ตัดทิ้งลดขนาดครึ่งหนึ่ง
+      # payload ปัจจุบันไม่มี track_err / tcp_force จึงตัดจริงแค่ target_q (ตัดเฉพาะขาลง DB)
+      # ⚠ target_q ของหุ่นจริงไม่ซ้ำ actual_q — จะวิเคราะห์คลาดเคลื่อนย้อนหลังจาก DB ต้องเอาออก
+      DROP_FIELDS:    "target_q,track_err,tcp_force"   # ค่าซ้ำและค่าศูนย์ (สมัยใช้ URSim) ตัดทิ้งลดขนาด
       MODELS_DIR:     /data/models                     # ตรงกับ volume modelfiles
     ports:
       - "3001:3001"
