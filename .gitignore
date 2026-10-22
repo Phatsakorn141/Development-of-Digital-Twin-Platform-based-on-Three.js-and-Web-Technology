@@ -17,6 +17,9 @@ Model_RF/rf.onnx.gz
 ai/run_payload_heavy.csv
 ai/run_payload_heavy.json
 
+# ค่าตั้งของ bridge.py อาจมีรหัสผ่าน broker — ใช้ ai/config.example.py เป็นแบบ
+ai/config.py
+
 # ไฟล์ log จากการรันทดสอบ — สร้างใหม่ได้ด้วย predict_mqtt.py --log
 ai/session.csv
 ai/summary.json
