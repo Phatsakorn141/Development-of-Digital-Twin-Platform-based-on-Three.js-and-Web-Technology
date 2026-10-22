@@ -15,7 +15,8 @@ predict_mqtt.py — ฟัง MQTT ทำนายความผิดปกต
     python predict_mqtt.py --vote 25 --min-sec 5
 """
 # ไลบรารีมาตรฐาน: argparse อ่าน argument · json แปลง payload · math ค่า π · time จับเวลา · sys
-import argparse, json, math, time, sys
+# os/gzip/shutil แตกไฟล์โมเดล rf.onnx.gz
+import argparse, json, math, time, sys, os, gzip, shutil
 # deque = คิวความยาวจำกัด (หน้าต่างเลื่อน) · Counter = นับ · defaultdict = dict มีค่าเริ่มต้น
 from collections import deque, Counter, defaultdict
 
@@ -43,6 +44,12 @@ CLASSES   = json.load(open(f"{MODEL}/classes.json"))
 # ค่า mean/std ของแต่ละช่อง (23 ช่อง) ที่ใช้ตอนเทรน
 SC        = np.load(f"{MODEL}/scaler.npz")
 MEAN, STD = SC["mean"], SC["std"]
+# rf.onnx ใหญ่ 108 MB เกินที่ git รับ → ใน git เก็บแค่ rf.onnx.gz
+# ยังไม่มี rf.onnx → แตกจาก .gz ครั้งเดียวตอนรันครั้งแรก
+if not os.path.exists(f"{MODEL}/rf.onnx") and os.path.exists(f"{MODEL}/rf.onnx.gz"):
+    print("แตกไฟล์ rf.onnx.gz ครั้งแรก...", flush=True)
+    with gzip.open(f"{MODEL}/rf.onnx.gz", "rb") as src, open(f"{MODEL}/rf.onnx", "wb") as dst:
+        shutil.copyfileobj(src, dst)
 # เปิดโมเดล ONNX รันบน CPU
 SESS      = ort.InferenceSession(f"{MODEL}/rf.onnx", providers=["CPUExecutionProvider"])
 # output ตัวสุดท้ายของ ONNX = ความน่าจะเป็นของแต่ละคลาส

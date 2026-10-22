@@ -1,0 +1,10 @@
+{
+  "friction": 0.542,
+  "gripper_low": 0.407,
+  "normal": 0.435,
+  "payload_forced_drop": 0.429,
+  "payload_heavy": 0.364,
+  "payload_heavy_drop": 0.517,
+  "speed_100": 0.854,
+  "speed_30": 0.824
+}

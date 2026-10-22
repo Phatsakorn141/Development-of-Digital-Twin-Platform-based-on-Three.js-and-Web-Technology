@@ -4,14 +4,15 @@ __pycache__/
 pgdata/
 *.dump
 
-# ── ทรัพย์สินของเพื่อน — ไม่เอาขึ้น repo สาธารณะ ──
-# โปรเจกต์ต้นทางของเพื่อน (web_digitaltwin) ก็กันไฟล์พวกนี้ไว้เองเช่นกัน
-# ต้องขอไฟล์จากเขาโดยตรง ดูวิธีวางใน README
-Model_RF_v2/
+# ── โมเดล AI ของเพื่อน ──
+# Model_RF_v2 (ตัวที่ใช้): เก็บใน git แค่ไฟล์เล็ก + rf.onnx.gz (8.8 MB)
+# rf.onnx ตัวเต็ม 108 MB เกินที่ git รับ — predict_mqtt.py แตกจาก .gz ให้เองตอนรันครั้งแรก
+Model_RF_v2/rf_small.onnx.gz
 Model_RF/rf.onnx
 Model_RF/rf.onnx.gz
 *.onnx
 *.onnx.gz
+!Model_RF_v2/rf.onnx.gz
 
 # ข้อมูล telemetry ดิบจากหุ่นจริงของเพื่อน
 ai/run_payload_heavy.csv

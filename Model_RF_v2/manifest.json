@@ -1,0 +1,48 @@
+{
+  "source": "/sessions/bold-pensive-ptolemy/mnt/ur_anomaly_db/analysis/deploy_onnx",
+  "models": {
+    "rf.onnx": {
+      "bytes": 113416493,
+      "size": "108.2 MB",
+      "sha256": "74ec4e4f636d14cc2f78d061f3d1d0bd476619da8a81368db5b2b9c168ded0ee"
+    },
+    "scaler.npz": {
+      "bytes": 684,
+      "size": "684.0 B",
+      "sha256": "0d9eef626ef2f7b11025324f76b60d74d7b617775594a85cfc4b3188843d207d"
+    },
+    "classes.json": {
+      "bytes": 151,
+      "size": "151.0 B",
+      "sha256": "ff6754c1c1faaaffcc2e711a9e275bc5d2ae046c1c80c475a07d70853c7b0346"
+    },
+    "thresholds.json": {
+      "bytes": 207,
+      "size": "207.0 B",
+      "sha256": "4fc7283349c7aa2b91ef41cbd7e937a9effa648d53195fbdc620cf0cda59b2dc"
+    },
+    "rf_small.onnx": {
+      "bytes": 9787032,
+      "size": "9.3 MB",
+      "gzip_size": "0.91 MB",
+      "config": {
+        "n_estimators": 80,
+        "max_depth": 18,
+        "min_samples_leaf": 5
+      },
+      "test_macro_f1": 0.9099,
+      "role": "PRIMARY (web-optimized)"
+    }
+  },
+  "n_classes": 8,
+  "classes": [
+    "friction",
+    "gripper_low",
+    "normal",
+    "payload_forced_drop",
+    "payload_heavy",
+    "payload_heavy_drop",
+    "speed_100",
+    "speed_30"
+  ]
+}
