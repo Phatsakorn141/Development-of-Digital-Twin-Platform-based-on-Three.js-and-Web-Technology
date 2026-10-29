@@ -1,0 +1,32 @@
+{
+  "mode": "web-worker",
+  "ttfi_ms": "23778.7",
+  "inference": {
+    "n": 57,
+    "mean_ms": 0.653,
+    "min_ms": 0,
+    "max_ms": 3.2,
+    "p50": 0.5,
+    "p95": 1.5,
+    "p99": 3.2,
+    "throughput_per_s": 177.57,
+    "RTF": 306.5,
+    "latency_drift_ms_per_s": 0.0487
+  },
+  "rendering": {
+    "frames": 73,
+    "mean_fps": 181.8,
+    "low1pct_fps": 125,
+    "frameTime_p95_ms": 7.5,
+    "frameTime_p99_ms": 8,
+    "longTasks": 0,
+    "totalBlocking_ms": 0
+  },
+  "memory": {
+    "samples": 0,
+    "start_mb": 0,
+    "end_mb": 0,
+    "leak_mb_per_s": 0
+  },
+  "errors": 0
+}

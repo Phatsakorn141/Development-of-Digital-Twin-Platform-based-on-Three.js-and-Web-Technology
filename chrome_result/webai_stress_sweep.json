@@ -1,0 +1,115 @@
+{
+  "secPer": 12,
+  "rows": [
+    {
+      "mode": "main",
+      "target_rate": 5,
+      "achieved_per_s": 5.1,
+      "inf_p50_ms": 0.4,
+      "inf_p95_ms": 0.5,
+      "mean_fps": 180.8,
+      "low1pct_fps": 96.2,
+      "tbt_ms": 0,
+      "longTasks": 0
+    },
+    {
+      "mode": "main",
+      "target_rate": 50,
+      "achieved_per_s": 49.08,
+      "inf_p50_ms": 0.3,
+      "inf_p95_ms": 0.5,
+      "mean_fps": 176.1,
+      "low1pct_fps": 101,
+      "tbt_ms": 0,
+      "longTasks": 0
+    },
+    {
+      "mode": "main",
+      "target_rate": 200,
+      "achieved_per_s": 186.55,
+      "inf_p50_ms": 0.3,
+      "inf_p95_ms": 0.5,
+      "mean_fps": 177.5,
+      "low1pct_fps": 99,
+      "tbt_ms": 0,
+      "longTasks": 0
+    },
+    {
+      "mode": "main",
+      "target_rate": 500,
+      "achieved_per_s": 185.59,
+      "inf_p50_ms": 0.3,
+      "inf_p95_ms": 0.5,
+      "mean_fps": 177.3,
+      "low1pct_fps": 97.1,
+      "tbt_ms": 0,
+      "longTasks": 0
+    },
+    {
+      "mode": "main",
+      "target_rate": 1000,
+      "achieved_per_s": 184.29,
+      "inf_p50_ms": 0.3,
+      "inf_p95_ms": 0.5,
+      "mean_fps": 178.4,
+      "low1pct_fps": 99,
+      "tbt_ms": 0,
+      "longTasks": 0
+    },
+    {
+      "mode": "worker",
+      "target_rate": 5,
+      "achieved_per_s": 5.07,
+      "inf_p50_ms": 0.5,
+      "inf_p95_ms": 1.5,
+      "mean_fps": 194.4,
+      "low1pct_fps": 84,
+      "tbt_ms": 0,
+      "longTasks": 0
+    },
+    {
+      "mode": "worker",
+      "target_rate": 50,
+      "achieved_per_s": 48.49,
+      "inf_p50_ms": 0.5,
+      "inf_p95_ms": 2.5,
+      "mean_fps": 202.5,
+      "low1pct_fps": 80,
+      "tbt_ms": 0,
+      "longTasks": 0
+    },
+    {
+      "mode": "worker",
+      "target_rate": 200,
+      "achieved_per_s": 178.56,
+      "inf_p50_ms": 0.5,
+      "inf_p95_ms": 1.5,
+      "mean_fps": 202.3,
+      "low1pct_fps": 80.6,
+      "tbt_ms": 0,
+      "longTasks": 0
+    },
+    {
+      "mode": "worker",
+      "target_rate": 500,
+      "achieved_per_s": 395.52,
+      "inf_p50_ms": 0.4,
+      "inf_p95_ms": 1.4,
+      "mean_fps": 205.5,
+      "low1pct_fps": 80,
+      "tbt_ms": 0,
+      "longTasks": 0
+    },
+    {
+      "mode": "worker",
+      "target_rate": 1000,
+      "achieved_per_s": 680.94,
+      "inf_p50_ms": 0.8,
+      "inf_p95_ms": 2.6,
+      "mean_fps": 0,
+      "low1pct_fps": 0,
+      "tbt_ms": 0,
+      "longTasks": 0
+    }
+  ]
+}

@@ -28,3 +28,7 @@ ai/v2_test.csv
 
 # ขยะจากการส่งไฟล์
 *.zip
+
+# -- STE2027 web inference (webai) --
+# test fixtures ขนาดใหญ่ 48MB (สร้างใหม่ได้จาก windows.npy) -- เก็บบน Drive
+webai/fixtures/*.f32

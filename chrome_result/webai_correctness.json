@@ -1,0 +1,51 @@
+{
+  "n": 4374,
+  "top1_agreement_web_vs_python_pct": 100,
+  "prob_Linf_web_vs_python": 0,
+  "accuracy": 0.9527,
+  "macroF1": 0.912,
+  "perClassF1": {
+    "friction": 0.9946,
+    "gripper_low": 0.9778,
+    "normal": 0.9362,
+    "payload_forced_drop": 0.9662,
+    "payload_heavy": 0.8502,
+    "payload_heavy_drop": 0.5714,
+    "speed_100": 1,
+    "speed_30": 0.9993
+  },
+  "topConfusions": [
+    [
+      "normal→payload_heavy",
+      134
+    ],
+    [
+      "payload_forced_drop→normal",
+      16
+    ],
+    [
+      "payload_heavy→normal",
+      14
+    ],
+    [
+      "normal→gripper_low",
+      10
+    ],
+    [
+      "payload_forced_drop→payload_heavy",
+      6
+    ],
+    [
+      "normal→friction",
+      5
+    ],
+    [
+      "normal→payload_forced_drop",
+      4
+    ],
+    [
+      "payload_heavy_drop→normal",
+      4
+    ]
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "duration_s": 60,
+  "main": {
+    "mode": "main-thread",
+    "ttfi_ms": "23778.7",
+    "inference": {
+      "n": 249,
+      "mean_ms": 0.368,
+      "min_ms": 0,
+      "max_ms": 0.6,
+      "p50": 0.4,
+      "p95": 0.5,
+      "p99": 0.6,
+      "throughput_per_s": 4.5,
+      "RTF": 543.7,
+      "latency_drift_ms_per_s": -0.0006
+    },
+    "rendering": {
+      "frames": 9898,
+      "mean_fps": 180,
+      "low1pct_fps": 96.2,
+      "frameTime_p95_ms": 8.6,
+      "frameTime_p99_ms": 10.4,
+      "longTasks": 0,
+      "totalBlocking_ms": 0
+    },
+    "memory": {
+      "samples": 30,
+      "start_mb": 39.5,
+      "end_mb": 46.4,
+      "leak_mb_per_s": 0.0918
+    },
+    "errors": 0
+  },
+  "worker": {
+    "mode": "web-worker",
+    "ttfi_ms": "23778.7",
+    "inference": {
+      "n": 249,
+      "mean_ms": 0.811,
+      "min_ms": 0,
+      "max_ms": 5.4,
+      "p50": 0.5,
+      "p95": 3.1,
+      "p99": 3.8,
+      "throughput_per_s": 4.49,
+      "RTF": 246.5,
+      "latency_drift_ms_per_s": 0.0014
+    },
+    "rendering": {
+      "frames": 9902,
+      "mean_fps": 178.5,
+      "low1pct_fps": 97.1,
+      "frameTime_p95_ms": 8.3,
+      "frameTime_p99_ms": 10.3,
+      "longTasks": 0,
+      "totalBlocking_ms": 0
+    },
+    "memory": {
+      "samples": 30,
+      "start_mb": 43.9,
+      "end_mb": 53.4,
+      "leak_mb_per_s": 0.1185
+    },
+    "errors": 0
+  },
+  "deltas": {
+    "TBT_ms": {
+      "main": 0,
+      "worker": 0
+    },
+    "low1pct_fps": {
+      "main": 96.2,
+      "worker": 97.1
+    },
+    "frameTime_p99_ms": {
+      "main": 10.4,
+      "worker": 10.3
+    },
+    "inf_p50_ms": {
+      "main": 0.4,
+      "worker": 0.5
+    },
+    "inf_p95_ms": {
+      "main": 0.5,
+      "worker": 3.1
+    }
+  }
+}
